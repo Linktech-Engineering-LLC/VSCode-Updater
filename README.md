@@ -3,8 +3,8 @@
 ![PowerShell](https://img.shields.io/badge/PowerShell-7.6%2B-blue)
 ![Platform](https://img.shields.io/badge/Platform-Windows-lightgrey)
 ![Status](https://img.shields.io/badge/Status-Active-success)
-![License](https://img.shields.io/badge/License-Apache_2.0-green)
-![Last Commit](https://img.shields.io/github/last-commit/LinktechEngineering/VSCode-Updater)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Last Commit](https://img.shields.io/github/last-commit/Linktech-Engineering-LLC/VSCode-Updater)
 
 A deterministic, operator‑grade PowerShell module for safely updating Visual Studio Code with full logging, cleanup routines, and watchdog monitoring.
 
@@ -45,3 +45,9 @@ Tests and documentation are actively expanding as it approaches first production
 
 ```powershell
 Invoke-Pester -Path Tests
+```
+
+## License
+
+This project is licensed under the MIT License.  
+See the [LICENSE](LICENSE) file for details.
