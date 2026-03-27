@@ -1,0 +1,46 @@
+# ============================
+# PowerShell Module Repo Ignore
+# ============================
+
+# Ignore PowerShell build artifacts
+*.psd1.psbackup
+*.psm1.psbackup
+
+# Ignore temporary PowerShell files
+*.ps1xml
+*.cache
+*.tmp
+
+# Ignore logs (if your module ever writes any)
+*.log
+
+# Ignore VS Code workspace files
+.vscode/
+*.code-workspace
+
+# Ignore Nextcloud sync conflict files
+*conflicted copy*
+*.sync-conflict*
+
+# Ignore OS-specific junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Ignore PowerShell local module installation paths (if symlinked)
+# (Your module lives in the repo, not in $PSModulePath)
+Modules/
+
+# Ignore downloaded installers (your updater will fetch VSCode installers)
+*.exe
+*.msi
+*.zip
+
+# Ignore PowerShell Gallery packaging output (if you ever publish)
+*.nupkg
+
+# Ignore Git metadata backups
+*.orig
+
+# Ignore anything you explicitly mark as private
+Private/*.local.ps1
