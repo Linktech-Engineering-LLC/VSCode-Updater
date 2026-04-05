@@ -22,6 +22,84 @@ A deterministic, operator‑grade PowerShell module for safely updating Visual S
 - PowerShell 7.6 or later  
 - Windows 10/11  
 
+## Usage
+### Importing the Module
+The module exposes a single public entry point. Import it from any location:
+
+```powershell
+Import-Module VSCode-Updater -Force
+```
+
+Or import directly from your project tree:
+
+```powershell
+Import-Module "$HOME\Nextcloud\Projects\Scripts\PowerShell\VSCode-Updater\VSCode-Updater.psd1" -Force
+```
+
+### Running the Updater
+Invoke the orchestrator:
+
+```powershell
+Update-VSCode
+```
+
+This triggers the full deterministic update pipeline:
+
+* Detect installed VS Code
+* Query latest available version
+* Download and validate installer
+* Stop running VS Code instances
+* Execute silent update
+* Watchdog‑monitor installer completion
+* Cleanup bootstrapper, helpers, and temp artifacts
+* Emit operator‑grade logs and return codes
+
+No parameters are required.
+All helper functions remain private by design.
+
+### Verifying Module Load
+
+Confirm the module exported only the public API:
+
+```powershell
+Get-Command -Module VSCode-Updater
+```
+
+Expected output:
+
+```Code
+Function  Update-VSCode
+```
+
+*Example: Updating VS Code from Anywhere*
+
+If the module is placed under your PowerShell module path:
+
+```Code
+$HOME\Documents\PowerShell\Modules\VSCode-Updater\
+```
+
+PowerShell auto‑loads it, allowing:
+
+```powershell
+Update-VSCode
+```
+
+from any shell without manual imports.
+
+### Example Output
+
+A typical successful run produces single‑line, timestamped entries similar to:
+
+```Code
+[2025-03-27 09:14:22] INFO  Detected installed version: 1.89.1
+[2025-03-27 09:14:23] INFO  Latest version available: 1.90.0
+[2025-03-27 09:14:24] INFO  Downloaded installer to: C:\Temp\vscode.exe
+[2025-03-27 09:14:31] INFO  Update completed successfully
+```
+
+All output is audit‑transparent and automation‑safe.
+
 ## Return Codes
 
 | Code | Meaning |

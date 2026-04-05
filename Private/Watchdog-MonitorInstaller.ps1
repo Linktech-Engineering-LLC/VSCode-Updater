@@ -10,9 +10,10 @@ function Watchdog-MonitorInstaller {
 
     Write-Log "[WATCHDOG] Monitoring child PID $($ChildProcess.Id), parent PID $ParentPID"
 
-    while (-not $ChildProcess.HasExited) {
+    while ($true) {
         Start-Sleep -Seconds 2
 
+        # Always re-query the child process — never trust the stale snapshot
         $child = Get-Process -Id $ChildProcess.Id -ErrorAction SilentlyContinue
         if (-not $child) {
             Write-Log "[WATCHDOG] Child exited — success"
@@ -50,7 +51,4 @@ function Watchdog-MonitorInstaller {
             $idleSeconds = 0
         }
     }
-
-    Write-Log "[WATCHDOG] Child exited normally — success"
-    return "Success"
 }

@@ -1,21 +1,25 @@
 function Cleanup-VSCodeHelpers {
-    Write-Log "[CLEANUP] Checking for VS Code helper processes"
+    Write-Log "[CLEANUP] Checking for VS Code and installer helper processes"
 
-    $helpers = Get-Process powershell -ErrorAction SilentlyContinue |
-        Where-Object {
-            $_.Path -like '*CodeSetup*' -or
-            $_.CommandLine -match 'CodeSetup' -or
-            $_.CommandLine -match 'VSCodeSetup'
+    $targets = @(
+        "Code",
+        "CodeHelper",
+        "CodeHelperCP",
+        "CodeHelperRenderer",
+        "CodeHelperWebView",
+        "CodeHelperGPU",
+        "CodeSetup",
+        "Setup",
+        "Uninstall",
+        "VSCodeSetup",
+        "VSCodeSetup.tmp"
+    )
+
+    foreach ($t in $targets) {
+        $procs = Get-Process -Name $t -ErrorAction SilentlyContinue
+        if ($procs) {
+            Write-Log "[CLEANUP] Terminating $t PIDs: $($procs.Id -join ', ')"
+            $procs | Stop-Process -Force -ErrorAction SilentlyContinue
         }
-
-    if ($helpers) {
-        Write-Log "[CLEANUP] Terminating helper PIDs: $($helpers.Id -join ', ')"
-        $helpers | Stop-Process -Force -ErrorAction SilentlyContinue
-    }
-
-    $tmp = Get-Process -Name "VSCodeSetup.tmp" -ErrorAction SilentlyContinue
-    if ($tmp) {
-        Write-Log "[CLEANUP] Terminating VSCodeSetup.tmp PID: $($tmp.Id)"
-        $tmp | Stop-Process -Force -ErrorAction SilentlyContinue
     }
 }

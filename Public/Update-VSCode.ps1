@@ -108,33 +108,27 @@ function Update-VSCode {
 
             Start-Sleep -Milliseconds 300
 
-            # Detect child worker
-            $child = Get-Process -ErrorAction SilentlyContinue |
-                Where-Object {
-                    $_.Id -ne $parentPID -and
-                    $_.StartTime -gt $p.StartTime -and
-                    (
-                        $_.ProcessName -like "CodeSetup*"      -or
-                        $_.ProcessName -like "VSCodeSetup*"    -or
-                        $_.ProcessName -match "^is-[A-Za-z0-9]+$" -or
-                        $_.ProcessName -match "tmp$"           -or
-                        $_.ProcessName -match "tmp.exe$"       -or
-                        $_.Path -like "*CodeSetup*"            -or
-                        $_.CommandLine -match "CodeSetup"      -or
-                        $_.CommandLine -match "VSCodeSetup"
-                    )
-                } |
-                Sort-Object StartTime |
-                Select-Object -Last 1
+			# Detect child worker using Win32_Process (reliable parent PID)
+			$child = Get-CimInstance Win32_Process |
+				Where-Object { $_.ParentProcessId -eq $parentPID } |
+				Sort-Object CreationDate |
+				Select-Object -Last 1
 
-            if ($child) {
-                Write-Log "[DETECT] Child worker PID: $($child.Id)"
-                $childPID = $child.Id
-            }
-            else {
-                Write-Log "[DETECT] No child detected — using parent as fallback"
-                $childPID = $parentPID
-            }
+			if ($child) {
+				$childPID = $child.ProcessId
+				Write-Log "[DETECT] Child worker PID: $childPID"
+			} else {
+				Write-Log "[DETECT] No child worker detected — installer is in fallback mode"
+				Write-Log "[DETECT] Killing parent PID $parentPID to break deadlock"
+
+				Stop-Process -Id $parentPID -Force -ErrorAction SilentlyContinue
+				Start-Sleep -Milliseconds 300
+
+				Write-Log "[RETRY] Restarting installer due to fallback deadlock"
+				Cleanup-VSCodeHelpers
+				Cleanup-InnoSetupWorkers
+				continue
+			}
 
             $childProcess = Get-Process -Id $childPID -ErrorAction SilentlyContinue
             $result = Watchdog-MonitorInstaller -ChildProcess $childProcess -ParentPID $parentPID -IdleTimeout $IdleTimeout
