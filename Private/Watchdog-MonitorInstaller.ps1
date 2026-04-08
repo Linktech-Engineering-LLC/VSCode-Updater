@@ -5,8 +5,16 @@ function Watchdog-MonitorInstaller {
         [int]$IdleTimeout
     )
 
-    $idleSeconds = 0
-    $lastState   = ""
+    $idleSeconds    = 0
+    $lastState      = ""
+    $lastCPU        = 0
+    $lastDisk       = 0
+    $fsIdleSeconds  = 0
+    $activeSeconds  = 0
+    $installPath    = "$env:LOCALAPPDATA\Programs\Microsoft VS Code"
+    $lastWriteTime  = (Get-Date)
+    $fsLogCooldown  = 10   # seconds
+    $lastFsLog      = (Get-Date).AddSeconds(-10)
 
     Write-Log "[WATCHDOG] Monitoring child PID $($ChildProcess.Id), parent PID $ParentPID"
 
@@ -18,6 +26,42 @@ function Watchdog-MonitorInstaller {
         if (-not $child) {
             Write-Log "[WATCHDOG] Child exited — success"
             return "Success"
+        }
+
+        # Increment FS idle timer every loop
+        $fsIdleSeconds += 2
+
+        # Detect file system activity in the VS Code directory
+        try {
+            $latestWrite = Get-ChildItem -Recurse $installPath -ErrorAction SilentlyContinue |
+                           Sort-Object LastWriteTime |
+                           Select-Object -Last 1
+
+            if ($latestWrite -and $latestWrite.LastWriteTime -gt $lastWriteTime) {
+                if ((Get-Date) -gt $lastFsLog.AddSeconds($fsLogCooldown)) {
+                    Write-Log "[WATCHDOG] File system activity detected — resetting timers"
+                    $lastFsLog = Get-Date
+                }
+
+                # Reset FS stall timer
+                $lastWriteTime  = $latestWrite.LastWriteTime
+                $fsIdleSeconds  = 0
+
+                # Reset CPU/Disk stall timers too
+                $activeSeconds  = 0
+                $idleSeconds    = 0
+            }
+        }
+        catch {
+            # Directory may not exist yet — ignore
+        }
+
+        # Filesystem stall detection
+        if ($fsIdleSeconds -ge $IdleTimeout) {
+            Write-Log "[WATCHDOG] No filesystem activity for $IdleTimeout seconds — killing installer"
+            Stop-Process -Id $ChildProcess.Id -Force -ErrorAction SilentlyContinue
+            Stop-Process -Id $ParentPID     -Force -ErrorAction SilentlyContinue
+            return "FS-Stalled"
         }
 
         $cpu  = $child.CPU
@@ -40,14 +84,46 @@ function Watchdog-MonitorInstaller {
                 Write-Log "[WATCHDOG] Waiting for child PID $($ChildProcess.Id) to exit"
                 Wait-Process -Id $ChildProcess.Id -ErrorAction SilentlyContinue
 
-                return "Success"
+                return "Idle-Stalled"
             }
         }
         else {
+            # Detect transition to active
             if ($lastState -ne "Active") {
                 Write-Log "[WATCHDOG] Child transitioned to active"
                 $lastState = "Active"
             }
+
+            # Detect stalled active state
+            if ($cpu -eq $lastCPU -and $disk -eq $lastDisk) {
+                $activeSeconds += 2
+
+                if ($activeSeconds -ge $IdleTimeout) {
+                    Write-Log "[WATCHDOG] Child is stalled in active state — killing parent PID $ParentPID and child PID $($ChildProcess.Id)"
+
+                    Stop-Process -Id $ChildProcess.Id -Force -ErrorAction SilentlyContinue
+                    Stop-Process -Id $ParentPID     -Force -ErrorAction SilentlyContinue
+
+                    try {
+                        Wait-Process -Id $ChildProcess.Id -Timeout 10 -ErrorAction SilentlyContinue
+                    }
+                    catch {
+                        Write-Log "[WATCHDOG] Child did not exit within timeout — continuing anyway"
+                    }
+
+                    return "Active-Stalled"
+                }
+            }
+            else {
+                # Progress is being made
+                $activeSeconds = 0
+            }
+
+            # Update last metrics
+            $lastCPU  = $cpu
+            $lastDisk = $disk
+
+            # Reset idle counter
             $idleSeconds = 0
         }
     }

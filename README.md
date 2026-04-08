@@ -6,16 +6,21 @@
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Last Commit](https://img.shields.io/github/last-commit/Linktech-Engineering-LLC/VSCode-Updater)
 
-A deterministic, operator‑grade PowerShell module for safely updating Visual Studio Code with full logging, cleanup routines, and watchdog monitoring.
+A deterministic, operator‑grade PowerShell module for safely updating Visual Studio Code with full 
+logging, cleanup routines, and a multi‑lane watchdog to detect installer stalls.
 
 ## Features
 
 - Fully automated VSCode update workflow  
 - Deterministic logging with timestamped entries  
 - Cleanup routines for bootstrapper, helpers, and Inno workers  
-- Watchdog monitoring for installer completion  
-- Safe return codes for automation and monitoring  
-- Pester test suite for all critical components  
+- Three‑lane watchdog monitoring:
+ - Filesystem stall detection
+ - CPU/Disk idle stall detection
+ - CPU/Disk active stall detection
+- Safe, explicit return codes for automation and diagnostics
+- Pester test suite for all critical components
+- Single public API (Update-VSCode) with all helpers private by design
 
 ## Requirements
 
@@ -23,7 +28,9 @@ A deterministic, operator‑grade PowerShell module for safely updating Visual S
 - Windows 10/11  
 
 ## Usage
+
 ### Importing the Module
+
 The module exposes a single public entry point. Import it from any location:
 
 ```powershell
@@ -37,6 +44,7 @@ Import-Module "$HOME\Nextcloud\Projects\Scripts\PowerShell\VSCode-Updater\VSCode
 ```
 
 ### Running the Updater
+
 Invoke the orchestrator:
 
 ```powershell
@@ -45,14 +53,13 @@ Update-VSCode
 
 This triggers the full deterministic update pipeline:
 
-* Detect installed VS Code
-* Query latest available version
-* Download and validate installer
-* Stop running VS Code instances
-* Execute silent update
-* Watchdog‑monitor installer completion
-* Cleanup bootstrapper, helpers, and temp artifacts
-* Emit operator‑grade logs and return codes
+* Cleanup of bootstrapper, helpers, and Inno workers
+* Optional skip/force download modes
+* Installer acquisition and caching
+* Detached installer launch
+* Watchdog monitoring of installer progress
+* Automatic stall detection and recovery
+* Final cleanup and exit code emission
 
 No parameters are required.
 All helper functions remain private by design.
@@ -100,19 +107,44 @@ A typical successful run produces single‑line, timestamped entries similar to:
 
 All output is audit‑transparent and automation‑safe.
 
+## Watchdog Behavior
+
+The updater includes a multi‑lane watchdog that monitors the installer for progress and stalls.
+
+### Stall Conditions
+
+| Stall Type | Description |
+| :--- | :--- |
+| Filesystem Stall | No writes to the VS Code install directory for the full IdleTimeout |
+| Idle Stall | CPU=0 and Disk=0 for the full IdleTimeout |
+| Active Stall | CPU/Disk metrics frozen (no change) for the full IdleTimeout |
+
+Each stall type produces a distinct return code and log entry.
+
 ## Return Codes
 
 | Code | Meaning |
-|------|---------|
-| 0    | Success |
-| 10   | Download failure |
-| 20   | SkipUpdate flag used |
+| :---: | :--- |
+| 0 | Success |
+| 10 | Download failure |
+| 12 | Cached installer missing |
+| 13 | Installer start failure |
+| 14 | Installer stalled after all retries |
+| 20 |	SkipUpdate flag used |
+| 30 |	Filesystem stall detected by watchdog |
+| 31 |	CPU/Disk idle stall detected by watchdog |
+| 32 |	CPU/Disk active stall detected by watchdog |
+| 99 |	Unexpected watchdog state |
+
+These codes are deterministic and safe for automation, scripting, and monitoring.
 
 ## Logging Behavior
 
-- Single‑line, timestamped entries  
-- No multi‑line banners  
-- Operator‑grade, audit‑transparent output  
+- Single‑line, timestamped entries
+- No banners or multi‑line blocks
+- All watchdog transitions logged
+- All exit paths emit a final banner with exit code
+- Fully audit‑transparent
 
 ## Development Status
 

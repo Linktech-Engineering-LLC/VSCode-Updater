@@ -1,10 +1,12 @@
 function Update-VSCode {
-    [CmdletBinding()]
-    param(
-        [switch]$SkipUpdate,
-        [int]$RetryCount = 3,
-        [int]$IdleTimeout = 120
-    )
+	[CmdletBinding()]
+	param(
+		[switch]$SkipUpdate,
+		[switch]$SkipDownload,
+        [switch]$ForceDownload
+		[int]$RetryCount = 3,
+		[int]$IdleTimeout = 600
+	)
 
     # =====================================================================
     #  Initialization + Metadata Banner
@@ -55,33 +57,18 @@ function Update-VSCode {
     # =====================================================================
     #  Download + Cache Installer
     # =====================================================================
+	$Mode = if ($SkipDownload) {
+		"Skip"
+	}
+	elseif ($ForceDownload) {
+		"Force"
+	}
+	else {
+		"Normal"
+	}
 
-    Write-Log "[DOWNLOAD] Downloading installer to: $tempInstaller"
-
-    try {
-        Invoke-WebRequest -Uri $installerUrl -OutFile $tempInstaller -UseBasicParsing
-    }
-    catch {
-        Write-Log "[ERROR] Failed to download installer: $($_.Exception.Message)"
-        Write-Log "----- $scriptName ended (exit 10) -----"
-        return 10
-    }
-
-    $cachedHash = Get-FileHashSafe -Path $cachedInstaller
-    $newHash    = Get-FileHashSafe -Path $tempInstaller
-
-    Write-Log "[HASH] Cached:    $cachedHash"
-    Write-Log "[HASH] Downloaded: $newHash"
-
-    if ($cachedHash -and $newHash -and ($cachedHash -eq $newHash)) {
-        Write-Log "[CACHE] Installer unchanged — using cached copy"
-        Remove-Item $tempInstaller -Force -ErrorAction SilentlyContinue
-    }
-    else {
-        Write-Log "[CACHE] Updating cached installer"
-        Copy-Item $tempInstaller $cachedInstaller -Force
-        Remove-Item $tempInstaller -Force -ErrorAction SilentlyContinue
-    }
+	$installer = Get-Installer -Url $url -CachePath $cachedInstaller -DownloadMode $Mode
+	
 
     if (-not (Test-Path $cachedInstaller)) {
         Write-Log "[ERROR] Cached installer missing after update"
@@ -92,6 +79,9 @@ function Update-VSCode {
     # =====================================================================
     #  Retry Loop
     # =====================================================================
+	# NEW: Ensure no stale InnoSetup workers exist before launching installer
+	Cleanup-InnoSetupWorkers
+	Start-Sleep -Milliseconds 200
 
     $attempt     = 0
     $maxAttempts = $RetryCount + 1
@@ -106,25 +96,25 @@ function Update-VSCode {
             $parentPID = $p.Id
             Write-Log "[DETECT] Parent PID: $parentPID"
 
-            Start-Sleep -Milliseconds 300
-
 			# Detect child worker using Win32_Process (reliable parent PID)
-			$child = Get-CimInstance Win32_Process |
-				Where-Object { $_.ParentProcessId -eq $parentPID } |
-				Sort-Object CreationDate |
-				Select-Object -Last 1
+			$child = $null
+			$detectTimeout = 10
+			$elapsed = 0
+
+			while (-not $child -and $elapsed -lt $detectTimeout) {
+				Start-Sleep -Milliseconds 500
+				$elapsed += 1
+
+				$child = Get-CimInstance Win32_Process -Filter "ParentProcessId = $parentPID" -ErrorAction SilentlyContinue |
+					Sort-Object CreationDate |
+					Select-Object -Last 1
+			}
 
 			if ($child) {
 				$childPID = $child.ProcessId
-				Write-Log "[DETECT] Child worker PID: $childPID"
+				Write-Log "[DETECT] Child worker PID: $childPID (found after ${elapsed}s)"
 			} else {
-				Write-Log "[DETECT] No child worker detected — installer is in fallback mode"
-				Write-Log "[DETECT] Killing parent PID $parentPID to break deadlock"
-
-				Stop-Process -Id $parentPID -Force -ErrorAction SilentlyContinue
-				Start-Sleep -Milliseconds 300
-
-				Write-Log "[RETRY] Restarting installer due to fallback deadlock"
+				Write-Log "[DETECT] No child worker detected after ${detectTimeout}s — treating as installer failure"
 				Cleanup-VSCodeHelpers
 				Cleanup-InnoSetupWorkers
 				continue
@@ -132,6 +122,37 @@ function Update-VSCode {
 
             $childProcess = Get-Process -Id $childPID -ErrorAction SilentlyContinue
             $result = Watchdog-MonitorInstaller -ChildProcess $childProcess -ParentPID $parentPID -IdleTimeout $IdleTimeout
+			switch ($result) {
+				"Success" {
+					Write-Log "[WATCHDOG] Installer exited normally"
+					Write-Log "----- $scriptName ended (exit 0) -----"
+					return 0
+				}
+
+				"FS-Stalled" {
+					Write-Log "[WATCHDOG] Filesystem stall detected — no writes for $IdleTimeout seconds"
+					Write-Log "----- $scriptName ended (exit 30) -----"
+					return 30
+				}
+
+				"Idle-Stalled" {
+					Write-Log "[WATCHDOG] CPU/Disk idle stall — no activity for $IdleTimeout seconds"
+					Write-Log "----- $scriptName ended (exit 31) -----"
+					return 31
+				}
+
+				"Active-Stalled" {
+					Write-Log "[WATCHDOG] CPU/Disk active stall — metrics frozen for $IdleTimeout seconds"
+					Write-Log "----- $scriptName ended (exit 32) -----"
+					return 32
+				}
+
+				default {
+					Write-Log "[WATCHDOG] Unexpected watchdog state: $result"
+					Write-Log "----- $scriptName ended (exit 99) -----"
+					return 99
+				}
+			}
         }
         catch {
             Write-Log "[ERROR] Installer start failure: $($_.Exception.Message)"
@@ -174,8 +195,12 @@ function Update-VSCode {
 
     Write-Log "[FINAL] Waiting for cleanup to settle"
     Start-Sleep -Seconds 5
-
-    Write-Log "[FINAL] Update-VSCode completed successfully"
+	
+	if ($attempt -lt $maxAttempts){
+		Write-Log "[FINAL] Update-VSCode completed successfully after $attempt attempts"
+	} else {
+		Write-Log "[FAIL] Errors encountered Updating VSCode"
+	}
     Write-Log "==============================================================================="
 
     return 0
