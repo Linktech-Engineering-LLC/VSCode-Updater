@@ -1,9 +1,22 @@
+<#
+    SPDX-License-Identifier: MIT
+    Copyright (c) 2026 Leon McClatchey, Linktech Engineering LLC
+
+    Package: VSCode-Updater
+    Author: Leon McClatchey
+    Company: Linktech Engineering LLC
+    Created: 2026-04-16
+    Modified: 2026-04-16
+    File: Public/Update-VSCode.ps1
+    Version: 1.0.0
+    Description: Updates Visual Studio Code deterministically with logging, cleanup, and restart logic.
+#>
 function Update-VSCode {
 	[CmdletBinding()]
 	param(
 		[switch]$SkipUpdate,
 		[switch]$SkipDownload,
-        [switch]$ForceDownload
+        [switch]$ForceDownload,
 		[int]$RetryCount = 3,
 		[int]$IdleTimeout = 600
 	)

@@ -1,3 +1,16 @@
+<#
+    SPDX-License-Identifier: MIT
+    Copyright (c) 2026 Leon McClatchey, Linktech Engineering LLC
+
+    Package: VSCode-Updater
+    Author: Leon McClatchey
+    Company: Linktech Engineering LLC
+    Created: 2026-04-16
+    Modified: 2026-04-16
+    File: Private/Cleanup-SetupBootstrapper.ps1
+    Version: 1.0.0
+    Description: Terminates VS Code setup bootstrapper processes to ensure a clean update state.
+#>
 function Cleanup-SetupBootstrapper {
     Write-Log "[CLEANUP] Checking for Setup bootstrapper processes"
 
