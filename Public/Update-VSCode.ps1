@@ -6,7 +6,7 @@
     Author: Leon McClatchey
     Company: Linktech Engineering LLC
     Created: 2026-04-16
-    Modified: 2026-04-16
+    Modified: 2026-04-17
     File: Public/Update-VSCode.ps1
     Version: 1.0.0
     Description: Updates Visual Studio Code deterministically with logging, cleanup, and restart logic.
@@ -80,7 +80,10 @@ function Update-VSCode {
 		"Normal"
 	}
 
-	$installer = Get-Installer -Url $url -CachePath $cachedInstaller -DownloadMode $Mode
+	Write-Host "Installer URL: '$installerUrl'"
+    Write-Host "Length: $($installerUrl.Length)"
+
+    $installer = Get-Installer -Url $installerUrl -CachePath $cachedInstaller -DownloadMode $Mode
 	
 
     if (-not (Test-Path $cachedInstaller)) {
