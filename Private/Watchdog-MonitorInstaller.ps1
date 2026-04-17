@@ -6,7 +6,7 @@
     Author: Leon McClatchey
     Company: Linktech Engineering LLC
     Created: 2026-04-16
-    Modified: 2026-04-16
+    Modified: 2026-04-17
     File: Private/Watchdog-MonitorInstaller.ps1
     Version: 1.0.0
     Description: Monitors the VS Code installer and related worker processes for CPU and disk activity, detects idle or stalled states, and terminates processes when the installer becomes unresponsive.
@@ -26,7 +26,7 @@ function Watchdog-MonitorInstaller {
     $activeSeconds  = 0
     $installPath    = "$env:LOCALAPPDATA\Programs\Microsoft VS Code"
     $lastWriteTime  = (Get-Date)
-    $fsLogCooldown  = 10   # seconds
+    $fsLogCooldown  = 30   # seconds
     $lastFsLog      = (Get-Date).AddSeconds(-10)
 
     Write-Log "[WATCHDOG] Monitoring child PID $($ChildProcess.Id), parent PID $ParentPID"
@@ -44,30 +44,34 @@ function Watchdog-MonitorInstaller {
         # Increment FS idle timer every loop
         $fsIdleSeconds += 2
 
-        # Detect file system activity in the VS Code directory
-        try {
-            $latestWrite = Get-ChildItem -Recurse $installPath -ErrorAction SilentlyContinue |
-                           Sort-Object LastWriteTime |
-                           Select-Object -Last 1
+		# Detect file system activity in the VS Code directory (exclude logs/temp)
+		try {
+			$latestWrite = Get-ChildItem -Recurse $installPath -File -ErrorAction SilentlyContinue |
+				Where-Object {
+					$_.Extension -notin '.log', '.tmp', '.bak' -and
+					$_.FullName -notmatch '\\logs?\\' -and
+					$_.FullName -notmatch '\\Crashpad\\' -and
+					$_.FullName -notmatch '\\User Data\\' -and
+					$_.FullName -notmatch '\\WebView2\\'
+				} |
+				Sort-Object LastWriteTime |
+				Select-Object -Last 1
 
-            if ($latestWrite -and $latestWrite.LastWriteTime -gt $lastWriteTime) {
-                if ((Get-Date) -gt $lastFsLog.AddSeconds($fsLogCooldown)) {
-                    Write-Log "[WATCHDOG] File system activity detected — resetting timers"
-                    $lastFsLog = Get-Date
-                }
+			if ($latestWrite -and $latestWrite.LastWriteTime -gt $lastWriteTime) {
+				if ((Get-Date) -gt $lastFsLog.AddSeconds($fsLogCooldown)) {
+					Write-Log "[WATCHDOG] FS activity (real installer file): $($latestWrite.Name)"
+					$lastFsLog = Get-Date
+				}
 
-                # Reset FS stall timer
-                $lastWriteTime  = $latestWrite.LastWriteTime
-                $fsIdleSeconds  = 0
-
-                # Reset CPU/Disk stall timers too
-                $activeSeconds  = 0
-                $idleSeconds    = 0
-            }
-        }
-        catch {
-            # Directory may not exist yet — ignore
-        }
+				$lastWriteTime = $latestWrite.LastWriteTime
+				$fsIdleSeconds = 0
+				$activeSeconds = 0
+				$idleSeconds   = 0
+			}
+		}
+		catch {
+			# Directory may not exist yet — ignore
+		}
 
         # Filesystem stall detection
         if ($fsIdleSeconds -ge $IdleTimeout) {

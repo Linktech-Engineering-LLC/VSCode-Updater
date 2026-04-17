@@ -42,7 +42,7 @@ These issues cause VS Code to hang, refuse to launch, or leave behind incomplete
 - Automatic stall recovery and retry logic  
 - Explicit, automation‑safe return codes  
 - Pester test suite for critical components  
-- Single public API (`Update-VSCode`) with all helpers private by design  
+- Single public API ( `Update-VSCode` ), implemented directly in the module and supported by private helper functions. 
 
 ---
 

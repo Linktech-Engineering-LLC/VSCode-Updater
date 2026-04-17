@@ -5,6 +5,8 @@ The design prioritizes reliability, predictable failure modes, hardened silent-i
 
 This document describes the internal architecture, lifecycle, watchdog model, exit‑code normalization, and security boundaries.
 
+The module now uses a consolidated .psm1 design. All public functions are implemented directly in the module file, with helper functions under Private/.
+
 ---
 
 ## 1. Design Principles
@@ -138,6 +140,15 @@ Code
 - No sensitive system details are logged  
 - Behavior is identical across PS5.1 and PS7+  
 
+### Watchdog Output Format
+
+The watchdog produces three categories of log entries:
+
+- **Activity logs** — printed when progress is detected
+- **Transition logs** — printed when the installer changes state (Idle → Active, etc.)
+- **Stall logs** — printed when the installer becomes unresponsive
+
+Each stall type maps to a deterministic exit code returned by Update-VSCode.
 ---
 
 ## 6. Exit-Code Normalization

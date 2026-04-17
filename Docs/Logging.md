@@ -60,19 +60,41 @@ Lifecycle banners mark major phases of execution.
 **Start Banner**
 
 ```Code
-===== VSCode-Updater: START (v2.0.0) =====
+2026-04-17 17:09:53 ===============================================================================
+2026-04-17 17:09:53   Update-VSCode started — Version 2.0.0
+2026-04-17 17:09:53   Host: <Name of Host Machine>
+2026-04-17 17:09:53   User: <Name of User Running the Script>
+2026-04-17 17:09:53   RetryCount=3  IdleTimeout=600
+2026-04-17 17:09:53 ===============================================================================
 ```
+
+**Start Banner Fields**
+
+- Timestamp
+- Script version
+- Host machine
+- User
+- RetryCount
+- IdleTimeout
 
 **Stop Banner**
 
 ```Code
-===== VSCode-Updater: STOP (ExitCode: 0) =====
+2026-04-17 17:36:14 ----- Update-VSCode ended (exit 30) -----
 ```
+
+**Stop Banner Fields**
+
+- Timestamp
+- Exit code
+- Includes stall reason (FS‑Stalled, Idle‑Stalled, Active‑Stalled, Normal)   
 
 **Watchdog Banner**
 
 ```Code
-===== WATCHDOG EVENT: Installer stalled after 120 seconds =====
+2026-04-17 17:13:47 [WATCHDOG] File system activity detected — resetting timers
+2026-04-17 17:36:14 [WATCHDOG] No filesystem activity for 600 seconds — killing installer
+2026-04-17 17:36:14 [WATCHDOG] Filesystem stall detected — no writes for 600 seconds
 ```
 
 Rules:
@@ -80,6 +102,38 @@ Rules:
 - Banners are always single-line.
 - No sensitive data may appear in banners.
 - Version is included for audit traceability.
+
+### Watchdog Logging Behavior
+
+The watchdog emits structured log entries during installer monitoring:
+
+- **Activity Detection**
+  ```Code
+  [WATCHDOG] File system activity detected — resetting timers
+  ```
+  Printed when meaningful writes occur in the VS Code installation directory.
+  This message is rate‑limited by fsLogCooldown (default: 30 seconds).
+
+- **Filesystem Stall Detection**
+If no meaningful writes occur for IdleTimeout seconds:
+
+  ```Code
+  [WATCHDOG] No filesystem activity for <IdleTimeout> seconds — killing installer
+  [WATCHDOG] Filesystem stall detected — no writes for <IdleTimeout> seconds
+  ```
+This results in exit code 30.
+
+- **Idle Stall Detection**
+  ```Code
+  [WATCHDOG] CPU/Disk idle stall — no activity for <IdleTimeout> seconds
+  ```
+  Exit code 31.
+
+- **Active Stall Detection**
+  ```Code
+  [WATCHDOG] CPU/Disk active stall — metrics frozen for <IdleTimeout> seconds
+  ```
+Exit code 32.
 
 ## 5. Sanitization Requirements
 
