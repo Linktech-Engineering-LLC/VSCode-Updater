@@ -12,11 +12,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install PowerShell 7.6
-        uses: PowerShell/PowerShell@v1
-        with:
-          version: '7.6.x'
-
       - name: Install Pester
         shell: pwsh
         run: Install-Module Pester -Force -Scope CurrentUser
