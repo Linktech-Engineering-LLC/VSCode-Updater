@@ -145,7 +145,7 @@ function Update-VSCode {
 			switch ($result) {
 				"Success" {
 					Write-Log "[WATCHDOG] Installer exited normally"
-					Write-Log "----- $scriptName ended (exit 0) -----"
+					Write-Log "----- $scriptName ended (exit 0) (Normal)-----"
 					return 0
 				}
 

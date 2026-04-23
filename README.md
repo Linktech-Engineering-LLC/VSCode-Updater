@@ -1,10 +1,22 @@
 # VSCode-Updater
 
-![PowerShell](https://img.shields.io/badge/PowerShell-7.6%2B-blue)
-![Platform](https://img.shields.io/badge/Platform-Windows-lightgrey)
-![Status](https://img.shields.io/badge/Status-Active-success)
-![License](https://img.shields.io/badge/License-MIT-green)
-![Last Commit](https://img.shields.io/github/last-commit/Linktech-Engineering-LLC/VSCode-Updater)
+<!-- Linktech Engineering Suite -->
+![Linktech Engineering Tools Suite](https://img.shields.io/badge/Linktech%20Engineering-Tools%20Suite-0052CC?style=flat-square&logo=powershell)
+
+<!-- PowerShell Gallery -->
+![PowerShell Gallery Version](https://img.shields.io/powershellgallery/v/VSCode-Updater?style=flat-square)
+![PowerShell Gallery Downloads](https://img.shields.io/powershellgallery/dt/VSCode-Updater?style=flat-square)
+
+<!-- GitHub -->
+![GitHub Release](https://img.shields.io/github/v/release/Linktech-Engineering-LLC/VSCode-Updater?style=flat-square)
+![Publish Workflow](https://img.shields.io/github/actions/workflow/status/Linktech-Engineering-LLC/VSCode-Updater/publish.yml?label=publish&style=flat-square)
+![Last Commit](https://img.shields.io/github/last-commit/Linktech-Engineering-LLC/VSCode-Updater?style=flat-square)
+
+<!-- Environment -->
+![PowerShell](https://img.shields.io/badge/PowerShell-7.6%2B-blue?style=flat-square)
+![Platform](https://img.shields.io/badge/Platform-Windows-lightgrey?style=flat-square)
+![Status](https://img.shields.io/badge/Status-Active-success?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
 A deterministic, operator‑grade PowerShell module for safely updating Visual Studio Code on Windows.  
 Provides full logging, cleanup routines, installer caching, and a multi‑lane watchdog to detect and recover from installer stalls.
