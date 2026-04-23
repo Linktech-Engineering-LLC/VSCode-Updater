@@ -6,9 +6,9 @@
     Author: Leon McClatchey
     Company: Linktech Engineering LLC
     Created: 2026-04-16
-    Modified: 2026-04-16
+    Modified: 2026-04-23
     File: VSCode-Updater.psm1
-    Version: 1.0.0
+    Version: 1.0.1
     Description: Module root for VSCode-Updater. Loads public functions, wires private helpers, and exposes the deterministic Update-VSCode entry point.
 #>
 # Load private functions
@@ -49,6 +49,24 @@ function Update-VSCode {
     Write-Log "  User: $env:USERNAME"
     Write-Log "  RetryCount=$RetryCount  IdleTimeout=$IdleTimeout"
     Write-Log "==============================================================================="
+
+    # Guard: VS Code must not be running
+    $running = Get-Process -Name "Code", "Code - Insiders" -ErrorAction SilentlyContinue
+
+    if ($running) {
+        Write-Host "VS Code is currently running."
+        Write-Host "Updating requires closing VS Code."
+
+        $choice = Read-Host "Close VS Code and continue? (Y/N)"
+
+        if ($choice -notin @('Y','y')) {
+            Write-Log -Level Warning -Message "User aborted update because VS Code was running."
+            return 30
+        }
+
+        Write-Log -Level Info -Message "Closing VS Code to continue update."
+        $running | Stop-Process -Force
+    }
 
     # =====================================================================
     #  Pre‑Cleanup

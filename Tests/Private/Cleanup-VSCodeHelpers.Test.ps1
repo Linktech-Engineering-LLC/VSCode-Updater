@@ -6,9 +6,8 @@ Describe "Cleanup-VSCodeHelpers" -Tag 'Private' {
     BeforeAll {
         # Import the function under test
         . "$PSScriptRoot/../../Private/Cleanup-VSCodeHelpers.ps1"
+        . "$PSScriptRoot/../../Private/Write-Log.ps1"
 
-        # Stub Write-Log to avoid real output
-        function Write-Log { param($m) }
     }
 
     Context "When helper processes exist" {

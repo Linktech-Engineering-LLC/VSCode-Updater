@@ -10,6 +10,7 @@
 *.ps1xml
 *.cache
 *.tmp
+Cache
 
 # Ignore logs (if your module ever writes any)
 *.log
