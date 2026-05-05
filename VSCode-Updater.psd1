@@ -13,12 +13,19 @@
 #>
 @{
     RootModule        = 'VSCode-Updater.psm1'
-    ModuleVersion     = '1.0.0'
-    GUID              = '00000000-0000-0000-0000-000000000000'
+    ModuleVersion     = '2.0.1'
+    GUID              = 'f2776614-4b50-45ba-b8fe-63875c447ab5'
     Author            = 'Leon McClatchey'
     CompanyName       = 'Linktech Engineering LLC'
     Description       = 'Deterministic, audit-transparent VS Code updater for Windows.'
     PowerShellVersion = '7.0'
     FunctionsToExport = @('Update-VSCode')
+
+    ProjectUri        = 'https://github.com/Linktech-Engineering-LLC/VSCode-Updater'
+    LicenseUri        = 'https://github.com/Linktech-Engineering-LLC/VSCode-Updater/blob/main/LICENSE'
+    IconUri           = 'https://raw.githubusercontent.com/Linktech-Engineering-LLC/VSCode-Updater/main/icon.png'
+    Tags              = @('vscode','update','automation','windows','powershell','devtools')
+    ReleaseNotes      = 'Initial public release of VSCode-Updater.'
+
     PrivateData       = @{}
 }

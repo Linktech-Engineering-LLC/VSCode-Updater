@@ -6,6 +6,15 @@ and this project adheres to **Semantic Versioning**.
 
 ---
 
+## [2.0.1] - 2026-05-05
+### Changed
+- Updated module manifest metadata for PowerShell Gallery publishing.
+- Bumped ModuleVersion to 2.0.1.
+- Added publish workflow trigger and manual dispatch support.
+
+### Fixed
+- Corrected manifest GUID and metadata fields required by the Gallery.
+
 ## [2.0.0] - 2026-04-09
 ### Added
 - **Deterministic watchdog** for monitoring installer execution:
@@ -48,6 +57,4 @@ and this project adheres to **Semantic Versioning**.
 ---
 
 ## [Unreleased]
-- Additional logging enhancements.
-- Optional verbose diagnostics mode.
-- Extended installer telemetry.
+- No changes yet.
