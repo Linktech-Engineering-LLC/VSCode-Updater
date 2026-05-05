@@ -19,15 +19,9 @@ jobs:
         env:
           NUGET_KEY: ${{ secrets.PSGALLERY_KEY }}
         run: |
+          Import-Module PowerShellGet -MinimumVersion 2.2.5 -Force
           Write-Host "Publishing VSCode-Updater to PowerShell Gallery..."
 
-          # Ensure module manifest exists
-          if (-not (Test-Path "./VSCode-Updater.psd1")) {
-            Write-Error "Module manifest not found. Expected VSCode-Updater.psd1 in repo root."
-            exit 1
-          }
-
-          # Publish
           Publish-Module `
             -Path . `
             -NuGetApiKey $env:NUGET_KEY `
