@@ -21,11 +21,13 @@
     PowerShellVersion = '7.0'
     FunctionsToExport = @('Update-VSCode')
 
-    ProjectUri        = 'https://github.com/Linktech-Engineering-LLC/VSCode-Updater'
-    LicenseUri        = 'https://github.com/Linktech-Engineering-LLC/VSCode-Updater/blob/main/LICENSE'
-    IconUri           = 'https://raw.githubusercontent.com/Linktech-Engineering-LLC/VSCode-Updater/main/icon.png'
-    Tags              = @('vscode','update','automation','windows','powershell','devtools')
-    ReleaseNotes      = 'Initial public release of VSCode-Updater.'
-
-    PrivateData       = @{}
+    PrivateData = @{
+        PSData = @{
+            ProjectUri  = 'https://github.com/Linktech-Engineering-LLC/VSCode-Updater'
+            LicenseUri  = 'https://github.com/Linktech-Engineering-LLC/VSCode-Updater/blob/main/LICENSE'
+            IconUri     = 'https://raw.githubusercontent.com/Linktech-Engineering-LLC/VSCode-Updater/main/icon.png'
+            Tags        = @('vscode','update','automation','windows','powershell','devtools')
+            ReleaseNotes = 'Initial public release of VSCode-Updater.'
+        }
+    }
 }
