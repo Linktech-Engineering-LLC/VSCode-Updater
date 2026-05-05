@@ -13,11 +13,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install PowerShell 7
-        uses: PowerShell/PowerShell@v2
-        with:
-          version: '7.4.x'
-
       - name: Publish module to PowerShell Gallery
         shell: pwsh
         env:
