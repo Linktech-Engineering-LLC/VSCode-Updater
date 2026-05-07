@@ -6,9 +6,9 @@
     Author: Leon McClatchey
     Company: Linktech Engineering LLC
     Created: 2026-04-23
-    Modified: 2026-04-23
+    Modified: 2026-05-07
     File: Sync.ps1
-    Version: 1.0.0
+    Version: 1.0.1
     Description: Deterministically synchronize the repo version of VSCode-Updater
              into the user's installed PowerShell module path.
 #>
@@ -126,16 +126,77 @@ else {
 }
 
 # =====================================================================
-# Full Sync
+# Incremental Sync (only changed files)
 # =====================================================================
 
-Write-Host "Performing FULL SYNC..."
-Write-SyncLog "Performing FULL SYNC..."
+Write-Host "Performing SYNC..."
+Write-SyncLog "Performing SYNC..."
 
-# Copy repo → module
-Copy-Item -Path "$RepoModule\*" -Destination $ModuleRoot -Recurse -Force -Verbose |
-    ForEach-Object { Write-SyncLog "Copied: $($_.FullName)" }
+$ModuleItems = @(
+    "VSCode-Updater.psm1",
+    "VSCode-Updater.psd1",
+    "Private"
+)
 
-Write-Host "Full sync complete."
-Write-SyncLog "Full sync complete."
+# Remove orphaned files in module folder
+$moduleExisting = Get-ChildItem -Path $ModuleRoot -Recurse -File -ErrorAction SilentlyContinue
+foreach ($file in $moduleExisting) {
+    $relative = $file.FullName.Substring($ModuleRoot.Length).TrimStart('\')
+    $source   = Join-Path $RepoRoot $relative
+
+    if (-not (Test-Path $source)) {
+        Write-SyncLog "Removing orphaned file: $relative"
+        Remove-Item $file.FullName -Force
+    }
+}
+
+foreach ($item in $ModuleItems) {
+    $source = Join-Path $RepoRoot $item
+    $dest   = Join-Path $ModuleRoot $item
+
+    # --- Case 1: Item is a FILE ---
+    if (Test-Path $source -PathType Leaf) {
+        if (-not (Test-Path $dest)) {
+            Write-SyncLog "Copying new file: $item"
+            Copy-Item -Path $source -Destination $dest -Force
+            continue
+        }
+
+        if ((Get-Item $source).LastWriteTimeUtc -ne (Get-Item $dest).LastWriteTimeUtc) {
+            Write-SyncLog "Updating changed file: $item"
+            Copy-Item -Path $source -Destination $dest -Force
+        }
+
+        continue
+    }
+
+    # --- Case 2: Item is a DIRECTORY ---
+    if (Test-Path $source -PathType Container) {
+        if (-not (Test-Path $dest)) {
+            Write-SyncLog "Copying new directory: $item"
+            Copy-Item -Path $source -Destination $dest -Recurse -Force
+            continue
+        }
+
+        $sourceFiles = Get-ChildItem -Path $source -Recurse -File
+        foreach ($sf in $sourceFiles) {
+            $relative = $sf.FullName.Substring($source.Length).TrimStart('\')
+            $target   = Join-Path $dest $relative
+
+            if (-not (Test-Path $target)) {
+                Write-SyncLog "Copying missing file: $relative"
+                Copy-Item -Path $sf.FullName -Destination $target -Force
+                continue
+            }
+
+            if ($sf.LastWriteTimeUtc -ne (Get-Item $target).LastWriteTimeUtc) {
+                Write-SyncLog "Updating changed file: $relative"
+                Copy-Item -Path $sf.FullName -Destination $target -Force
+            }
+        }
+    }
+}
+
+Write-Host "Sync complete."
+Write-SyncLog "Sync complete."
 Write-SyncLog "==============================================================="

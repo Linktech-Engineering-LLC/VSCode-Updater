@@ -6,9 +6,9 @@
     Author: Leon McClatchey
     Company: Linktech Engineering LLC
     Created: 2026-04-16
-    Modified: 2026-04-23
+    Modified: 2026-05-07
     File: VSCode-Updater.psm1
-    Version: 1.0.1
+    Version: 2.0.1
     Description: Module root for VSCode-Updater. Loads public functions, wires private helpers, and exposes the deterministic Update-VSCode entry point.
 #>
 # Load private functions
@@ -24,13 +24,14 @@ function Update-VSCode {
 		[int]$RetryCount = 3,
 		[int]$IdleTimeout = 600
 	)
+    $MaxRetries = 5   # hard ceiling for safety
 
     # =====================================================================
     #  Initialization + Metadata Banner
     # =====================================================================
 
     $scriptName    = "Update-VSCode"
-    $scriptVersion = "2.0.0"
+    $scriptVersion = "2.0.1"
 
     $codeExe    = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe"
     $codeRoot   = Split-Path $codeExe -Parent
@@ -102,16 +103,41 @@ function Update-VSCode {
 		"Normal"
 	}
 
-	Write-Host "Installer URL: '$installerUrl'"
+    Write-Host "Installer URL: '$installerUrl'"
     Write-Host "Length: $($installerUrl.Length)"
 
     $installer = Get-Installer -Url $installerUrl -CachePath $cachedInstaller -DownloadMode $Mode
-	
 
+    # --- HARD FAILURE CHECK (keep this exactly as-is) ---
     if (-not (Test-Path $cachedInstaller)) {
         Write-Log "[ERROR] Cached installer missing after update"
         Write-Log "----- $scriptName ended (exit 12) -----"
         return 12
+    }
+
+    # --- DIAGNOSTICS: Corrupted installer detection ---
+    $size = (Get-Item $cachedInstaller).Length
+    if ($size -lt 5MB) {
+        Write-Log "[DETECT] Cached installer appears corrupted or incomplete (size: $size bytes)"
+    }
+
+    # --- DIAGNOSTICS: Stale cached installer detection ---
+    $installerItem = Get-Item $cachedInstaller
+    $age = (Get-Date) - $installerItem.LastWriteTime
+    if ($age.TotalDays -gt 7) {
+        Write-Log "[DETECT] Cached installer is stale (age: $([math]::Round($age.TotalDays,2)) days)"
+        Write-Log "[DETECT] This may indicate a past failed or incomplete update attempt."
+    }
+
+    # --- DIAGNOSTICS: Stale install directory timestamp mismatch ---
+    $installDir = "$env:LOCALAPPDATA\Programs\Microsoft VS Code"
+    if (Test-Path $installDir) {
+        $lastWrite = (Get-Item $installDir).LastWriteTime
+        if ($lastWrite -lt (Get-Date).AddMinutes(-10)) {
+            Write-Log "[DETECT] Install directory timestamp unchanged. Installer may have exited without updating."
+        }
+    } else {
+        Write-Log "[DETECT] VS Code install directory not found. Installation may be incomplete or corrupted."
     }
 
     # =====================================================================
@@ -120,6 +146,11 @@ function Update-VSCode {
 	# NEW: Ensure no stale InnoSetup workers exist before launching installer
 	Cleanup-InnoSetupWorkers
 	Start-Sleep -Milliseconds 200
+
+    if ($RetryCount -gt $MaxRetries) {
+        Write-Log "[WARN] RetryCount ($RetryCount) exceeds maximum allowed ($MaxRetries). Clamping."
+        $RetryCount = $MaxRetries
+    }
 
     $attempt     = 0
     $maxAttempts = $RetryCount + 1
@@ -213,6 +244,7 @@ function Update-VSCode {
         Write-Log "[STALL] Installer stalled on attempt $attempt"
 
         if ($attempt -ge $maxAttempts) {
+            Write-Log "[DETECT] Installer exhausted all allowed attempts ($maxAttempts). Update may be stuck or corrupted."
             Write-Log "[FAIL] Installer stalled after $attempt attempts — aborting"
             Write-Log "----- $scriptName ended (exit 14) (Excessive Attempts) -----"
             return 14

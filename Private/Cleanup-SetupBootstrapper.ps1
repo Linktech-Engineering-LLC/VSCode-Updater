@@ -6,9 +6,9 @@
     Author: Leon McClatchey
     Company: Linktech Engineering LLC
     Created: 2026-04-16
-    Modified: 2026-04-16
+    Modified: 2026-05-07
     File: Private/Cleanup-SetupBootstrapper.ps1
-    Version: 1.0.0
+    Version: 1.0.1
     Description: Terminates VS Code setup bootstrapper processes to ensure a clean update state.
 #>
 function Cleanup-SetupBootstrapper {
@@ -24,6 +24,15 @@ function Cleanup-SetupBootstrapper {
             $_.ProcessName -match "CodeUpdate*" -or
             $_.ProcessName -match "VSCodeUpdate*"
         }
+
+    # --- NEW: double‑spawn detection ---
+    if ($setup.Count -gt 1) {
+        Write-Log "[CLEANUP] Detected multiple bootstrapper workers: $($setup.Count)"
+        $setup | ForEach-Object {
+            Write-Log "[CLEANUP] Worker PID=$($_.Id) StartTime=$($_.StartTime)"
+        }
+    }
+    # -----------------------------------
 
     if ($setup) {
         Write-Log "[CLEANUP] Terminating bootstrapper PIDs: $($setup.Id -join ', ')"

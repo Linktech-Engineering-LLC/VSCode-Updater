@@ -11,6 +11,11 @@ and this project adheres to **Semantic Versioning**.
 - Updated module manifest metadata for PowerShell Gallery publishing.
 - Bumped ModuleVersion to 2.0.1.
 - Added publish workflow trigger and manual dispatch support.
+- Added hard retry ceiling (`$MaxRetries = 5`) with clamping and warning when user-specified RetryCount exceeds limit.
+- Added diagnostic for retry exhaustion when installer stalls across all allowed attempts.
+- Added detection for stale cached installers (age > 7 days) to identify debris from past failed updates.
+- Added corrupted-download detection (installer size < 5MB) to catch incomplete or truncated downloads.
+- Added stale install-directory timestamp detection to identify silent installer failures.
 
 ### Fixed
 - Corrected manifest GUID and metadata fields required by the Gallery.
