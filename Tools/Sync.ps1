@@ -6,7 +6,7 @@
     Author: Leon McClatchey
     Company: Linktech Engineering LLC
     Created: 2026-04-23
-    Modified: 2026-05-07
+    Modified: 2026-05-20
     File: Sync.ps1
     Version: 1.0.1
     Description: Deterministically synchronize the repo version of VSCode-Updater
@@ -41,10 +41,12 @@ $RepoRoot   = Split-Path $ScriptRoot -Parent
 # The module lives directly in the repo root (not nested)
 $RepoModule = $RepoRoot
 
-# Resolve Windows Documents folder safely (OneDrive-aware, locale-aware)
-$Documents  = [Environment]::GetFolderPath('MyDocuments')
-$HomeDocs   = Join-Path $HOME 'Documents'
-$ModuleRoot = Join-Path $HomeDocs 'PowerShell\Modules\VSCode-Updater'
+$LoadedModule = Get-Module VSCode-Updater -ListAvailable | Select-Object -First 1
+$ActiveModulePath = $LoadedModule.ModuleBase
+if (-not $ActiveModulePath) {
+    $ActiveModulePath = Join-Path $HOME 'Documents\PowerShell\Modules\VSCode-Updater'
+}
+$ModuleRoot = $ActiveModulePath
 
 Write-Host "Repo:    $RepoModule"
 Write-Host "Module:  $ModuleRoot"
