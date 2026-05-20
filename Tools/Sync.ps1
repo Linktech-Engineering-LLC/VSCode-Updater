@@ -43,7 +43,8 @@ $RepoModule = $RepoRoot
 
 # Resolve Windows Documents folder safely (OneDrive-aware, locale-aware)
 $Documents  = [Environment]::GetFolderPath('MyDocuments')
-$ModuleRoot = Join-Path $Documents 'PowerShell\Modules\VSCode-Updater'
+$HomeDocs   = Join-Path $HOME 'Documents'
+$ModuleRoot = Join-Path $HomeDocs 'PowerShell\Modules\VSCode-Updater'
 
 Write-Host "Repo:    $RepoModule"
 Write-Host "Module:  $ModuleRoot"
