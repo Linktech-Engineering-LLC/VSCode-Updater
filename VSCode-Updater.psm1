@@ -6,24 +6,25 @@
     Author: Leon McClatchey
     Company: Linktech Engineering LLC
     Created: 2026-04-16
-    Modified: 2026-05-07
+    Modified: 2026-06-14
     File: VSCode-Updater.psm1
-    Version: 2.0.1
-    Description: Module root for VSCode-Updater. Loads public functions, wires private helpers, and exposes the deterministic Update-VSCode entry point.
+    Version: 2.1.0
+    Description: Module root for VSCode-Updater. Loads public functions, wires private helpers, and exposes the deterministic Update-VSCode entry point and related management commands.
 #>
+
 # Load private functions
 Get-ChildItem -Path "$PSScriptRoot/Private" -Filter *.ps1 |
     ForEach-Object { . $_.FullName }
 
 function Update-VSCode {
-	[CmdletBinding()]
-	param(
-		[switch]$SkipUpdate,
-		[switch]$SkipDownload,
+    [CmdletBinding()]
+    param(
+        [switch]$SkipUpdate,
+        [switch]$SkipDownload,
         [switch]$ForceDownload,
-		[int]$RetryCount = 3,
-		[int]$IdleTimeout = 600
-	)
+        [int]$RetryCount = 3,
+        [int]$IdleTimeout = 600
+    )
     $MaxRetries = 5   # hard ceiling for safety
 
     # =====================================================================
@@ -31,7 +32,7 @@ function Update-VSCode {
     # =====================================================================
 
     $scriptName    = "Update-VSCode"
-    $scriptVersion = "2.0.1"
+    $scriptVersion = "2.1.0"
 
     $codeExe    = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe"
     $codeRoot   = Split-Path $codeExe -Parent
@@ -93,15 +94,15 @@ function Update-VSCode {
     # =====================================================================
     #  Download + Cache Installer
     # =====================================================================
-	$Mode = if ($SkipDownload) {
-		"Skip"
-	}
-	elseif ($ForceDownload) {
-		"Force"
-	}
-	else {
-		"Normal"
-	}
+    $Mode = if ($SkipDownload) {
+        "Skip"
+    }
+    elseif ($ForceDownload) {
+        "Force"
+    }
+    else {
+        "Normal"
+    }
 
     Write-Host "Installer URL: '$installerUrl'"
     Write-Host "Length: $($installerUrl.Length)"
@@ -143,9 +144,9 @@ function Update-VSCode {
     # =====================================================================
     #  Retry Loop
     # =====================================================================
-	# NEW: Ensure no stale InnoSetup workers exist before launching installer
-	Cleanup-InnoSetupWorkers
-	Start-Sleep -Milliseconds 200
+    # NEW: Ensure no stale InnoSetup workers exist before launching installer
+    Cleanup-InnoSetupWorkers
+    Start-Sleep -Milliseconds 200
 
     if ($RetryCount -gt $MaxRetries) {
         Write-Log "[WARN] RetryCount ($RetryCount) exceeds maximum allowed ($MaxRetries). Clamping."
@@ -165,63 +166,63 @@ function Update-VSCode {
             $parentPID = $p.Id
             Write-Log "[DETECT] Parent PID: $parentPID"
 
-			# Detect child worker using Win32_Process (reliable parent PID)
-			$child = $null
-			$detectTimeout = 10
-			$elapsed = 0
+            # Detect child worker using Win32_Process (reliable parent PID)
+            $child = $null
+            $detectTimeout = 10
+            $elapsed = 0
 
-			while (-not $child -and $elapsed -lt $detectTimeout) {
-				Start-Sleep -Milliseconds 500
-				$elapsed += 1
+            while (-not $child -and $elapsed -lt $detectTimeout) {
+                Start-Sleep -Milliseconds 500
+                $elapsed += 1
 
-				$child = Get-CimInstance Win32_Process -Filter "ParentProcessId = $parentPID" -ErrorAction SilentlyContinue |
-					Sort-Object CreationDate |
-					Select-Object -Last 1
-			}
+                $child = Get-CimInstance Win32_Process -Filter "ParentProcessId = $parentPID" -ErrorAction SilentlyContinue |
+                    Sort-Object CreationDate |
+                    Select-Object -Last 1
+            }
 
-			if ($child) {
-				$childPID = $child.ProcessId
-				Write-Log "[DETECT] Child worker PID: $childPID (found after ${elapsed}s)"
-			} else {
-				Write-Log "[DETECT] No child worker detected after ${detectTimeout}s — treating as installer failure"
-				Cleanup-VSCodeHelpers
-				Cleanup-InnoSetupWorkers
-				continue
-			}
+            if ($child) {
+                $childPID = $child.ProcessId
+                Write-Log "[DETECT] Child worker PID: $childPID (found after ${elapsed}s)"
+            } else {
+                Write-Log "[DETECT] No child worker detected after ${detectTimeout}s — treating as installer failure"
+                Cleanup-VSCodeHelpers
+                Cleanup-InnoSetupWorkers
+                continue
+            }
 
             $childProcess = Get-Process -Id $childPID -ErrorAction SilentlyContinue
             $result = Watchdog-MonitorInstaller -ChildProcess $childProcess -ParentPID $parentPID -IdleTimeout $IdleTimeout
-			switch ($result) {
-				"Success" {
-					Write-Log "[WATCHDOG] Installer exited normally"
-					Write-Log "----- $scriptName ended (exit 0) (Normal)-----"
-					return 0
-				}
+            switch ($result) {
+                "Success" {
+                    Write-Log "[WATCHDOG] Installer exited normally"
+                    Write-Log "----- $scriptName ended (exit 0) (Normal)-----"
+                    return 0
+                }
 
-				"FS-Stalled" {
-					Write-Log "[WATCHDOG] Filesystem stall detected — no writes for $IdleTimeout seconds"
-					Write-Log "----- $scriptName ended (exit 30) (FS-Stalled) -----"
-					return 30
-				}
+                "FS-Stalled" {
+                    Write-Log "[WATCHDOG] Filesystem stall detected — no writes for $IdleTimeout seconds"
+                    Write-Log "----- $scriptName ended (exit 30) (FS-Stalled) -----"
+                    return 30
+                }
 
-				"Idle-Stalled" {
-					Write-Log "[WATCHDOG] CPU/Disk idle stall — no activity for $IdleTimeout seconds"
-					Write-Log "----- $scriptName ended (exit 31) (Idle Stall) -----"
-					return 31
-				}
+                "Idle-Stalled" {
+                    Write-Log "[WATCHDOG] CPU/Disk idle stall — no activity for $IdleTimeout seconds"
+                    Write-Log "----- $scriptName ended (exit 31) (Idle Stall) -----"
+                    return 31
+                }
 
-				"Active-Stalled" {
-					Write-Log "[WATCHDOG] CPU/Disk active stall — metrics frozen for $IdleTimeout seconds"
-					Write-Log "----- $scriptName ended (exit 32) (Active Stall) -----"
-					return 32
-				}
+                "Active-Stalled" {
+                    Write-Log "[WATCHDOG] CPU/Disk active stall — metrics frozen for $IdleTimeout seconds"
+                    Write-Log "----- $scriptName ended (exit 32) (Active Stall) -----"
+                    return 32
+                }
 
-				default {
-					Write-Log "[WATCHDOG] Unexpected watchdog state: $result"
-					Write-Log "----- $scriptName ended (exit 99) (Unexpected Error) -----"
-					return 99
-				}
-			}
+                default {
+                    Write-Log "[WATCHDOG] Unexpected watchdog state: $result"
+                    Write-Log "----- $scriptName ended (exit 99) (Unexpected Error) -----"
+                    return 99
+                }
+            }
         }
         catch {
             Write-Log "[ERROR] Installer start failure: $($_.Exception.Message)"
@@ -260,20 +261,72 @@ function Update-VSCode {
     }
 
     # =====================================================================
+    #  Post‑Install Health Check (Hybrid Trigger)
+    # =====================================================================
+
+    Write-Log "[CHECK] Running post-install health validation"
+
+    # 1. Ensure Code.exe exists
+    if (-not (Test-Path $codeExe)) {
+        Write-Log "[CHECK] Code.exe missing — triggering ZIP fallback"
+        return Invoke-ZipFallback -Reason "Missing Code.exe"
+    }
+
+    # 2. Ensure Code.exe launches
+    try {
+        $proc = Start-Process $codeExe -PassThru -ErrorAction Stop
+        Start-Sleep -Seconds 2
+
+        if ($proc.HasExited) {
+            Write-Log "[CHECK] VS Code exited immediately — triggering ZIP fallback"
+            return Invoke-ZipFallback -Reason "Launch failure"
+        }
+
+        $proc | Stop-Process -Force
+    }
+    catch {
+        Write-Log "[CHECK] Exception launching VS Code: $($_.Exception.Message)"
+        Write-Log "[CHECK] Triggering ZIP fallback"
+        return Invoke-ZipFallback -Reason "Launch exception"
+    }
+
+    # 3. Detect leftover update debris
+    $debris = @(
+        "$codeRoot\update.exe",
+        "$codeRoot\*.tmp",
+        "$codeRoot\*.partial"
+    )
+
+    foreach ($pattern in $debris) {
+        if (Get-ChildItem $pattern -ErrorAction SilentlyContinue) {
+            Write-Log "[CHECK] Detected leftover update debris ($pattern) — triggering ZIP fallback"
+            return Invoke-ZipFallback -Reason "Debris detected"
+        }
+    }
+
+    Write-Log "[CHECK] Health check passed — installer appears successful"
+
+    # =====================================================================
     #  Finalization
     # =====================================================================
 
     Write-Log "[FINAL] Waiting for cleanup to settle"
     Start-Sleep -Seconds 5
-	
-	if ($attempt -lt $maxAttempts){
-		Write-Log "[FINAL] Update-VSCode completed successfully after $attempt attempts"
-	} else {
-		Write-Log "[FAIL] Errors encountered Updating VSCode"
-	}
+    
+    if ($attempt -lt $maxAttempts){
+        Write-Log "[FINAL] Update-VSCode completed successfully after $attempt attempts"
+    } else {
+        Write-Log "[FAIL] Errors encountered Updating VSCode"
+    }
     Write-Log "==============================================================================="
 
     return 0
 }
 
-Export-ModuleMember -Function Update-VSCode
+Export-ModuleMember -Function Update-VSCode, `
+    Get-VSCodeVersions, `
+    Switch-VSCodeVersion, `
+    Invoke-VSCodeRollback, `
+    Test-VSCodeSymlink, `
+    Start-VSCodeSafeMode, `
+    Get-VSCodeDashboard

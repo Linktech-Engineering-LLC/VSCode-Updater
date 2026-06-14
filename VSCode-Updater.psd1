@@ -6,7 +6,7 @@
     Author: Leon McClatchey
     Company: Linktech Engineering LLC
     Created: 2026-04-16
-    Modified: 2026-04-16
+    Modified: 2026-06-14
     File: VSCode-Updater.psd1
     Version: 1.0.0
     Description: Module manifest defining metadata, versioning, and export configuration for the VSCode-Updater module.
