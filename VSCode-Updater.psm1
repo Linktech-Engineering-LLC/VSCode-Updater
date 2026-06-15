@@ -12,6 +12,11 @@
     Description: Module root for VSCode-Updater. Loads public functions, wires private helpers, and exposes the deterministic Update-VSCode entry point and related management commands.
 #>
 
+# Dot-source Public functions
+Get-ChildItem -Path $PSScriptRoot/Public -Filter *.ps1 | ForEach-Object {
+    . $_.FullName
+}
+
 # Load private functions
 Get-ChildItem -Path "$PSScriptRoot/Private" -Filter *.ps1 |
     ForEach-Object { . $_.FullName }
@@ -246,9 +251,8 @@ function Update-VSCode {
 
         if ($attempt -ge $maxAttempts) {
             Write-Log "[DETECT] Installer exhausted all allowed attempts ($maxAttempts). Update may be stuck or corrupted."
-            Write-Log "[FAIL] Installer stalled after $attempt attempts — aborting"
-            Write-Log "----- $scriptName ended (exit 14) (Excessive Attempts) -----"
-            return 14
+            Write-Log "[FAIL] Installer stalled after $attempt attempts — invoking ZIP fallback"
+            return Invoke-ZipFallback -Reason "Installer stalled after $attempt attempts"
         }
 
         Write-Log "[RETRY] Cleaning processes and artifacts before retry"
@@ -329,4 +333,5 @@ Export-ModuleMember -Function Update-VSCode, `
     Invoke-VSCodeRollback, `
     Test-VSCodeSymlink, `
     Start-VSCodeSafeMode, `
-    Get-VSCodeDashboard
+    Get-VSCodeDashboard, `
+    Invoke-ZipFallback

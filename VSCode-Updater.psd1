@@ -8,7 +8,7 @@
     Created: 2026-04-16
     Modified: 2026-06-14
     File: VSCode-Updater.psd1
-    Version: 1.0.0
+    Version: 2.0.1
     Description: Module manifest defining metadata, versioning, and export configuration for the VSCode-Updater module.
 #>
 @{
@@ -19,7 +19,7 @@
     CompanyName       = 'Linktech Engineering LLC'
     Description       = 'Deterministic, audit-transparent VS Code updater for Windows.'
     PowerShellVersion = '7.0'
-    FunctionsToExport = @('Update-VSCode')
+    FunctionsToExport = '*'
 
     PrivateData = @{
         PSData = @{

@@ -36,17 +36,21 @@ Write-Host "=== VSCode-Updater Sync ==="
 
 # Repo root = parent of Tools\
 $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$RepoRoot   = Split-Path $ScriptRoot -Parent
+$RepoRoot   = "C:\Users\ldmcc\Nextcloud\Projects\Scripts\PowerShell\VSCode-Updater"
 
 # The module lives directly in the repo root (not nested)
 $RepoModule = $RepoRoot
 
 $LoadedModule = Get-Module VSCode-Updater -ListAvailable | Select-Object -First 1
-$ActiveModulePath = $LoadedModule.ModuleBase
-if (-not $ActiveModulePath) {
-    $ActiveModulePath = Join-Path $HOME 'Documents\PowerShell\Modules\VSCode-Updater'
+
+if ($LoadedModule) {
+    # Use the versioned module folder directly
+    $ModuleRoot = $LoadedModule.ModuleBase 
 }
-$ModuleRoot = $ActiveModulePath
+else {
+    # First-time install
+    $ModuleRoot = Join-Path $HOME 'Documents\PowerShell\Modules\VSCode-Updater'
+}
 
 Write-Host "Repo:    $RepoModule"
 Write-Host "Module:  $ModuleRoot"
@@ -138,7 +142,8 @@ Write-SyncLog "Performing SYNC..."
 $ModuleItems = @(
     "VSCode-Updater.psm1",
     "VSCode-Updater.psd1",
-    "Private"
+    "Private",
+    "Public"
 )
 
 # Remove orphaned files in module folder
@@ -175,28 +180,15 @@ foreach ($item in $ModuleItems) {
 
     # --- Case 2: Item is a DIRECTORY ---
     if (Test-Path $source -PathType Container) {
-        if (-not (Test-Path $dest)) {
-            Write-SyncLog "Copying new directory: $item"
-            Copy-Item -Path $source -Destination $dest -Recurse -Force
-            continue
+        # Always recreate the directory for deterministic sync
+        if (Test-Path $dest) {
+            Write-SyncLog "Removing existing directory: $item"
+            Remove-Item $dest -Recurse -Force
         }
 
-        $sourceFiles = Get-ChildItem -Path $source -Recurse -File
-        foreach ($sf in $sourceFiles) {
-            $relative = $sf.FullName.Substring($source.Length).TrimStart('\')
-            $target   = Join-Path $dest $relative
-
-            if (-not (Test-Path $target)) {
-                Write-SyncLog "Copying missing file: $relative"
-                Copy-Item -Path $sf.FullName -Destination $target -Force
-                continue
-            }
-
-            if ($sf.LastWriteTimeUtc -ne (Get-Item $target).LastWriteTimeUtc) {
-                Write-SyncLog "Updating changed file: $relative"
-                Copy-Item -Path $sf.FullName -Destination $target -Force
-            }
-        }
+        Write-SyncLog "Copying fresh directory: $item"
+        Copy-Item -Path $source -Destination $dest -Recurse -Force
+        continue
     }
 }
 

@@ -39,13 +39,14 @@ function Get-VSCodeDashboard {
     catch { }
 
     [PSCustomObject]@{
-        SymlinkValid     = $symlinkOK
-        CurrentTarget    = $currentTarget
-        Launches         = $launchOK
+        SymlinkValid      = $symlinkOK
+        LinkType          = if (Test-Path $linkPath) { (Get-Item $linkPath).LinkType } else { $null }
+        CurrentTarget     = $currentTarget
+        Launches          = $launchOK
         InstalledVersions = $versions.Name -join ", "
-        VersionCount     = $versions.Count
-        ActiveVersion    = Split-Path $currentTarget -Leaf
-        CachePath        = Join-Path $PSScriptRoot "..\Cache"
-        LastUpdateLog    = (Get-ChildItem "$env:TEMP" -Filter "VSCodeUpdater*.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+        VersionCount      = $versions.Count
+        ActiveVersion     = if ($currentTarget) { Split-Path $currentTarget -Leaf } else { $null }
+        CachePath         = Join-Path $PSScriptRoot "..\Cache"
+        LastUpdateLog     = (Get-ChildItem "$env:TEMP" -Filter "VSCodeUpdater*.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
     }
 }

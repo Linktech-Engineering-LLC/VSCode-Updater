@@ -20,21 +20,25 @@ function Test-VSCodeSymlink {
     $linkPath = Join-Path $root "Microsoft VS Code"
 
     if (-not (Test-Path $linkPath)) {
-        Write-Log "[VALIDATE] Symlink missing"
+        Write-Log "[VALIDATE] Link missing"
         return $false
     }
 
     $item = Get-Item $linkPath -ErrorAction SilentlyContinue
+    if ($null -eq $item) {
+        Write-Log "[VALIDATE] Link path exists but could not be resolved"
+        return $false
+    }
 
-    if ($item.LinkType -ne "SymbolicLink") {
-        Write-Log "[VALIDATE] Path exists but is not a symlink"
+    # Accept both SymbolicLink and Junction
+    if ($item.LinkType -notin @("SymbolicLink", "Junction")) {
+        Write-Log "[VALIDATE] Path exists but is not a symlink or junction (LinkType=$($item.LinkType))"
         return $false
     }
 
     $target = $item.Target
-
     if (-not (Test-Path $target)) {
-        Write-Log "[VALIDATE] Symlink target missing: $target"
+        Write-Log "[VALIDATE] Link target missing: $target"
         return $false
     }
 
@@ -44,6 +48,6 @@ function Test-VSCodeSymlink {
         return $false
     }
 
-    Write-Log "[VALIDATE] Symlink OK → $target"
+    Write-Log "[VALIDATE] Link OK ($($item.LinkType)) → $target"
     return $true
 }

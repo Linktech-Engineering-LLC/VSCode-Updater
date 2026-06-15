@@ -41,6 +41,13 @@ function Invoke-ZipFallback {
     Write-Log "[FALLBACK] Extracting ZIP to $targetDir"
     Expand-Archive -Path $zipPath -DestinationPath $targetDir -Force
 
+    # Keep only the last 3 versions
+    $versions = Get-ChildItem $root -Directory | Where-Object {
+        $_.Name -like "VSCode-*"
+    } | Sort-Object CreationTime -Descending
+
+    $versions | Select-Object -Skip 3 | Remove-Item -Recurse -Force
+
     # 4. Replace broken install with symlink
     $linkPath = "$env:LOCALAPPDATA\Programs\Microsoft VS Code"
 
@@ -50,7 +57,8 @@ function Invoke-ZipFallback {
     }
 
     Write-Log "[FALLBACK] Creating symlink to new version"
-    New-Item -ItemType SymbolicLink -Path $linkPath -Target $targetDir | Out-Null
+    # New-Item -ItemType SymbolicLink -Path $linkPath -Target $targetDir | Out-Null
+    cmd /c mklink /J "$linkPath" "$targetDir" 
 
     # 5. Version retention cleanup
     Manage-VSCodeVersions -Keep 3
