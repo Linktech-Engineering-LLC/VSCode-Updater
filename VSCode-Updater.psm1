@@ -201,31 +201,36 @@ function Update-VSCode {
                 "Success" {
                     Write-Log "[WATCHDOG] Installer exited normally"
                     Write-Log "----- $scriptName ended (exit 0) (Normal)-----"
-                    return 0
+					$result="Success"
+                    break
                 }
 
                 "FS-Stalled" {
                     Write-Log "[WATCHDOG] Filesystem stall detected — no writes for $IdleTimeout seconds"
                     Write-Log "----- $scriptName ended (exit 30) (FS-Stalled) -----"
-                    return 30
+					$result="FS Stalled"
+					break
                 }
 
                 "Idle-Stalled" {
                     Write-Log "[WATCHDOG] CPU/Disk idle stall — no activity for $IdleTimeout seconds"
                     Write-Log "----- $scriptName ended (exit 31) (Idle Stall) -----"
-                    return 31
+					$result="Idle Stall"
+					break
                 }
 
                 "Active-Stalled" {
                     Write-Log "[WATCHDOG] CPU/Disk active stall — metrics frozen for $IdleTimeout seconds"
                     Write-Log "----- $scriptName ended (exit 32) (Active Stall) -----"
-                    return 32
+					$result="Active Stall"
+					break
                 }
 
                 default {
                     Write-Log "[WATCHDOG] Unexpected watchdog state: $result"
                     Write-Log "----- $scriptName ended (exit 99) (Unexpected Error) -----"
-                    return 99
+					$result="Unexpected Error"
+					break
                 }
             }
         }
@@ -246,19 +251,29 @@ function Update-VSCode {
             Write-Log "[SUCCESS] Installer completed successfully on attempt $attempt"
             break
         }
+		else {
+			Write-Log "[STALL] Installer stalled on attempt $attempt"
+			if ($result -like "*Stall*") {
+				Write-Log "[STALL] Detected stall state '$result' — performing cleanup before fallback"
 
-        Write-Log "[STALL] Installer stalled on attempt $attempt"
+				Cleanup-VSCodeHelpers
+				Cleanup-InnoSetupWorkers
 
-        if ($attempt -ge $maxAttempts) {
-            Write-Log "[DETECT] Installer exhausted all allowed attempts ($maxAttempts). Update may be stuck or corrupted."
-            Write-Log "[FAIL] Installer stalled after $attempt attempts — invoking ZIP fallback"
-            return Invoke-ZipFallback -Reason "Installer stalled after $attempt attempts"
-        }
+				Write-Log "[STALL] Cleanup complete — invoking ZIP fallback"
+				return Invoke-ZipFallback -Reason $result
+			}
 
-        Write-Log "[RETRY] Cleaning processes and artifacts before retry"
+			if ($attempt -ge $maxAttempts) {
+				Write-Log "[FAIL] Installer stalled after $attempt attempts — invoking ZIP fallback"
+				return Invoke-ZipFallback -Reason "Installer stalled after $attempt attempts"
+			}
+			Write-Log "[RETRY] Cleaning processes and artifacts before retry"
 
-        Cleanup-VSCodeHelpers
-        Cleanup-InnoSetupWorkers
+			Cleanup-VSCodeHelpers
+			Cleanup-InnoSetupWorkers
+			continue
+		}
+
 
         Get-Process Code, CodeHelper*, CodeSetup*, VSCodeSetup* -ErrorAction SilentlyContinue |
             Stop-Process -Force -ErrorAction SilentlyContinue
