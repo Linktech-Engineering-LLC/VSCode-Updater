@@ -9,7 +9,6 @@ on:
 jobs:
   publish:
     runs-on: windows-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
