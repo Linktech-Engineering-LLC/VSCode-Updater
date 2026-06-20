@@ -13,7 +13,7 @@
 #>
 @{
     RootModule        = 'VSCode-Updater.psm1'
-    ModuleVersion     = '2.0.1'
+    ModuleVersion     = '2.1.0'
     GUID              = 'f2776614-4b50-45ba-b8fe-63875c447ab5'
     Author            = 'Leon McClatchey'
     CompanyName       = 'Linktech Engineering LLC'
