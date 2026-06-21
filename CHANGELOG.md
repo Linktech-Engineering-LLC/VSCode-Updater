@@ -6,6 +6,30 @@ and this project adheres to **Semantic Versioning**.
 
 ---
 
+## [2.1.0] - 2026-06-20
+### Added
+- Introduced full multi-version management support:
+  - `Get-VSCodeVersions` — Enumerates all detected VS Code installations.
+  - `Switch-VSCodeVersion` — Switches the active VS Code version via symlink control.
+  - `Invoke-VSCodeRollback` — Performs deterministic rollback to the previously active version.
+  - `Test-VSCodeSymlink` — Validates symlink integrity, permissions, and target correctness.
+  - `Start-VSCodeSafeMode` — Launches VS Code with extensions disabled for diagnostics.
+  - `Get-VSCodeDashboard` — Displays a structured diagnostic dashboard for operators.
+  - `Invoke-ZipFallback` — ZIP-based fallback installer for environments where the EXE installer fails.
+- Added symlink-based version switching architecture with deterministic behavior.
+- Added version discovery layer for Stable, User, System, and ZIP installations.
+- Added rollback metadata tracking for safe, reversible transitions.
+- Added dashboard aggregation for update history, cache state, and watchdog metrics.
+
+### Changed
+- Updated module exports to include new public commands.
+- Updated README.md to reflect expanded command surface and multi-version capabilities.
+- Improved installer cache validation to support multiple parallel versions.
+
+### Fixed
+- Corrected edge cases where stale symlink targets could persist after failed updates.
+- Improved fallback logic when installer metadata is missing or corrupted.
+
 ## [2.0.1] - 2026-05-05
 ### Changed
 - Updated module manifest metadata for PowerShell Gallery publishing.

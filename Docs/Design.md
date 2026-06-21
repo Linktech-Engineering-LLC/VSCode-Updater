@@ -1,6 +1,7 @@
 # VSCode-Updater Architecture & Design
 
-VSCode-Updater is built around a deterministic, operator‑grade update pipeline for Visual Studio Code on Windows.  
+VSCode-Updater is built around a deterministic, operator‑grade update and version‑management pipeline for Visual Studio Code on Windows. The design prioritizes reliability, predictable failure modes, hardened silent-install behavior, symlink-based version switching, and audit‑transparent logging. The module now exposes a full suite of public commands for updating, rollback, safe-mode execution, version discovery, and ZIP-based fallback installation.
+
 The design prioritizes reliability, predictable failure modes, hardened silent-install behavior, and audit‑transparent logging.
 
 This document describes the internal architecture, lifecycle, watchdog model, exit‑code normalization, and security boundaries.
@@ -57,6 +58,49 @@ Code
 
 All components are implemented as internal helpers under `/Private`.
 
+## 2.1 Multi-Version Architecture
+
+VSCode-Updater now supports multiple installed versions of Visual Studio Code, including:
+
+- System installers
+- User installers
+- ZIP/portable builds
+- Cached fallback builds
+
+A managed symlink (`vscode.exe`) is used to control the active version.  
+All version switching, rollback, and fallback operations modify only the symlink target — never the underlying installations.
+
+### Components
+
+- **Version Discovery Layer**  
+  Scans known installation paths and ZIP caches to enumerate available versions.
+
+- **Symlink Controller**  
+  Creates, validates, and updates the active VS Code symlink.
+
+- **Rollback Metadata**  
+  Tracks previous symlink targets to enable deterministic rollback.
+
+- **ZIP Fallback Extractor**  
+  Extracts portable builds when the EXE installer fails or is unavailable.
+
+These components operate independently of the update pipeline but share the same logging and deterministic behavior guarantees.
+
+## 2.2 Public Command Surface
+
+The module now exposes the following operator‑grade commands:
+
+- `Update-VSCode` — Primary update pipeline with watchdog monitoring.
+- `Get-VSCodeVersions` — Enumerates all detected VS Code installations.
+- `Switch-VSCodeVersion` — Updates the symlink to activate a specific version.
+- `Invoke-VSCodeRollback` — Reverts to the previously active version.
+- `Test-VSCodeSymlink` — Validates symlink integrity and target correctness.
+- `Start-VSCodeSafeMode` — Launches VS Code with extensions disabled.
+- `Get-VSCodeDashboard` — Displays a structured diagnostic dashboard.
+- `Invoke-ZipFallback` — ZIP-based fallback installer for failed EXE updates.
+
+All commands share the same logging model, deterministic behavior, and security boundaries.
+
 ---
 
 ## 3. Update Lifecycle
@@ -64,6 +108,7 @@ All components are implemented as internal helpers under `/Private`.
 The update process follows a strict, linear lifecycle:
 
 1. **Start Banner Logged**  
+(If multi-version mode is active, version discovery and symlink validation occur before download resolution.)
 2. **Download Channel Resolution**  
 3. **Installer Download**  
 4. **Silent Installer Execution**  
@@ -106,6 +151,20 @@ The installer may:
 - fail silently  
 
 The watchdog ensures deterministic handling of all cases.
+
+### 4.1 ZIP Fallback Installer
+
+When the EXE installer fails, is corrupted, or cannot be launched, VSCode-Updater automatically falls back to a ZIP-based installation path.
+
+ZIP fallback guarantees:
+
+- deterministic extraction
+- no GUI
+- no elevation required
+- full compatibility with symlink switching
+- identical logging and watchdog behavior
+
+The fallback is invoked automatically or manually via `Invoke-ZipFallback`.
 
 ---
 
@@ -239,6 +298,9 @@ Behavior is identical across both runtimes:
 - Extended exit-code mapping  
 - Additional watchdog heuristics  
 - Telemetry-free diagnostics mode  
+- Extended multi-version orchestration (Insiders + Stable coexistence)
+- Optional version pinning
+- Enhanced dashboard metrics
 
 These enhancements will not break deterministic behavior.
 
@@ -255,4 +317,4 @@ VSCode-Updater is engineered for:
 - minimal surface area  
 - operator‑grade reliability  
 
-This design ensures stable, repeatable updates across Windows environments.
+VSCode-Updater is engineered for deterministic execution, hardened silent installs, predictable failure modes, audit‑transparent logging, and multi-version reliability. The addition of symlink-based switching, rollback, safe-mode execution, and ZIP fallback ensures stable, repeatable behavior across all Windows environments and installation types.

@@ -1,7 +1,6 @@
 # Logging Architecture
 
-VSCode-Updater uses a deterministic, operator‑grade logging lifecycle designed for audit transparency, reproducibility, and safe diagnostics.  
-All logs follow a strict structure, avoid sensitive information, and behave consistently across PowerShell 5.1 and PowerShell 7+.
+VSCode-Updater uses a deterministic, operator‑grade logging lifecycle designed for audit transparency, reproducibility, and safe diagnostics. All logs follow a strict structure, avoid sensitive information, and behave consistently across PowerShell 5.1 and PowerShell 7+. Logging now covers both the update pipeline and the multi-version management system (symlink switching, rollback, ZIP fallback, and version discovery).
 
 ---
 
@@ -53,6 +52,41 @@ Each log line follows:
 [2026-04-09 08:12:45] [WARN] Installer returned exit code 1638 (already installed)
 [2026-04-09 08:12:46] [INFO] Update completed successfully.
 ```
+### 3.1 Multi-Version Logging
+
+The logging system now includes structured entries for version-management operations:
+
+- **Version Discovery**
+  Logged when scanning for installed VS Code versions:
+
+```
+[INFO] Discovered 3 installed VS Code versions
+```
+
+- **Symlink Switching**
+Logged when updating the active version:
+
+```
+[INFO] Switching active version → 1.90.0
+[INFO] Symlink updated: vscode.exe → C:\Apps\VSCode\1.90.0\
+```
+
+- **Rollback**
+Logged when reverting to a previous version:
+
+```
+[WARN] Rolling back to previous version: 1.89.1
+```
+
+- **ZIP Fallback**
+Logged when the fallback installer is invoked:
+
+```
+[WARN] EXE installer failed — invoking ZIP fallback
+[INFO] Extracted ZIP to <vscode>\1.90.0-fallback\
+```
+
+All multi-version logs follow the same sanitization and timestamp rules as the update pipeline.
 
 ## 4. Lifecycle Banners
 Lifecycle banners mark major phases of execution.
@@ -135,6 +169,25 @@ This results in exit code 30.
   ```
 Exit code 32.
 
+### Installer Integrity Logging
+
+VSCode-Updater logs additional diagnostics when installer integrity checks fail:
+
+- **Stale Installer (age > 7 days)**
+
+```
+[WARN] Cached installer is stale — age: 12 days
+```
+
+- **Corrupted Download (size < 5MB)**
+
+```
+[ERROR] Installer appears truncated — size: 1.2 MB
+```
+
+These checks prevent silent failures and ensure deterministic behavior.
+
+
 ## 5. Sanitization Requirements
 
 Logs must never contain:
@@ -166,6 +219,7 @@ Log:
 
 ```Code
 <temp>\vscode_installer.exe
+```
 
 ## 6. Watchdog Logging
 
@@ -190,6 +244,20 @@ Rules:
 - Watchdog logs must be timestamped.
 - No process IDs or sensitive system details may be logged.
 - Stall detection must be explicit and unambiguous.
+
+### Retry Ceiling Logging
+
+If the user specifies a RetryCount higher than the module's hard ceiling (default: 5), the value is clamped and logged:
+
+```
+[WARN] RetryCount=12 exceeds maximum allowed (5) — clamping to 5
+```
+
+If all retries are exhausted:
+
+```
+[ERROR] Retry limit reached — installer stalled across all attempts
+```
 
 ## 7. Exit-Code Logging
 
@@ -260,7 +328,22 @@ Example:
 [INFO] Normalized exit state: Failure
 ```
 
-## 11. Summary
+## 11. Dashboard Logging
+
+`Get-VSCodeDashboard` produces structured, read-only diagnostic output.  
+Dashboard logs include:
+
+- active version
+- installed versions
+- symlink status
+- installer cache state
+- last update result
+- watchdog metrics (if available)
+
+Dashboard output is informational only and does not modify system state.
+
+
+## 12. Summary
 
 The logging system is designed to be:
 
@@ -271,4 +354,5 @@ The logging system is designed to be:
 - cross‑platform
 - sanitized
 
-Logs are a first‑class part of the module’s architecture and must remain stable across releases.
+The logging system is designed to be deterministic, safe, predictable, audit‑friendly, and consistent across all supported runtimes. Logging now covers both the update pipeline and the multi-version management system, ensuring complete traceability for updates, rollbacks, symlink operations, fallback installs, and diagnostics.
+

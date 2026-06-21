@@ -27,12 +27,12 @@ Provides full logging, cleanup routines, installer caching, and a multi‑lane w
 
 The built‑in Visual Studio Code updater frequently fails on long‑lived Windows systems due to:
 
-- stale bootstrapper processes  
-- orphaned InnoSetup workers  
-- partial or corrupted installs  
-- silent failures with no diagnostics  
-- reissued builds that reuse the same version number  
-- inconsistent behavior across Windows update states  
+* stale bootstrapper processes  
+* orphaned InnoSetup workers  
+* partial or corrupted installs  
+* silent failures with no diagnostics  
+* reissued builds that reuse the same version number  
+* inconsistent behavior across Windows update states  
 
 These issues cause VS Code to hang, refuse to launch, or leave behind incomplete installations.
 
@@ -42,26 +42,26 @@ These issues cause VS Code to hang, refuse to launch, or leave behind incomplete
 
 ## Features
 
-- Fully automated VS Code update workflow  
-- Deterministic logging with timestamped, single‑line entries  
-- Cleanup routines for bootstrapper, helpers, and Inno workers  
-- Installer acquisition and caching  
-- Detached installer execution  
-- Multi‑lane watchdog monitoring:
-  - Filesystem stall detection  
-  - CPU/Disk idle stall detection  
-  - CPU/Disk active stall detection  
-- Automatic stall recovery and retry logic  
-- Explicit, automation‑safe return codes  
-- Pester test suite for critical components  
-- Single public API ( `Update-VSCode` ), implemented directly in the module and supported by private helper functions. 
+* Fully automated VS Code update workflow  
+* Deterministic logging with timestamped, single‑line entries  
+* Cleanup routines for bootstrapper, helpers, and Inno workers  
+* Installer acquisition and caching  
+* Detached installer execution  
+* Multi‑lane watchdog monitoring:
+  * Filesystem stall detection  
+  * CPU/Disk idle stall detection  
+  * CPU/Disk active stall detection  
+* Automatic stall recovery and retry logic  
+* Explicit, automation‑safe return codes  
+* Pester test suite for critical components  
+* Primary public API (``Update-VSCode``) supported by additional operator‑grade commands for version management, rollback, diagnostics, and safe‑mode execution.
 
 ---
 
 ## Requirements
 
-- PowerShell 7.6 or later  
-- Windows 10 or Windows 11  
+* PowerShell 7.6 or later  
+* Windows 10 or Windows 11  
 
 ---
 
@@ -100,13 +100,13 @@ Update-VSCode
 
 This triggers the full deterministic update pipeline:
 
-- Cleanup of stale installer processes
-- Optional skip/force download modes
-- Installer download and caching
-- Detached installer launch
-- Watchdog monitoring of progress
-- Stall detection and recovery
-- Final cleanup and exit code emission
+* Cleanup of stale installer processes
+* Optional skip/force download modes
+* Installer download and caching
+* Detached installer launch
+* Watchdog monitoring of progress
+* Stall detection and recovery
+* Final cleanup and exit code emission
 
 No parameters are required for a standard update run.  
 
@@ -129,28 +129,107 @@ Update-VSCode [
 
 ### Parameter Details
 
-- `-SkipUpdate`
+* `-SkipUpdate`
 Bypasses the update process entirely.
 Useful when you want to run cleanup routines or validate environment behavior without performing an update.
 
-- `-SkipDownload`
+* `-SkipDownload`
 Uses an already‑cached installer.
 No network request is made.
 If no cached installer exists, return code 12 is emitted.
 
-- `-ForceDownload`
+* `-ForceDownload`
 Always downloads a fresh installer, ignoring any cached copy.
 Overrides -SkipDownload if both are provided.
 
-- `-RetryCount <int>` (default: 3)
+* `-RetryCount <int>` (default: 3)
 Number of retry attempts the watchdog will perform if a stall is detected.
 
-- `-IdleTimeout <int>` (default: 600 seconds)
+* `-IdleTimeout <int>` (default: 600 seconds)
 Maximum allowed stall duration before the watchdog triggers a retry or failure.
 Applies to filesystem, idle, and active stall detection lanes.
 
 All parameters are optional.
 If you call `Update-VSCode` with no arguments, the module runs with its default, deterministic behavior.
+
+## Additional Commands
+
+VSCode‑Updater now includes a suite of operator‑grade commands for version management, rollback, diagnostics, and safe‑mode execution. All commands are exported automatically when the module is imported.
+
+``Get-VSCodeVersions``
+
+Lists all installed VS Code versions detected on the system, including:
+* Stable builds
+* User installers
+* System installers
+* Portable ZIP installs (if present)
+
+Useful for multi‑version environments or verifying rollback targets.
+
+``Switch-VSCodeVersion``
+
+Switches the active VS Code version by updating the symlink that VSCode‑Updater manages.
+
+This enables:
+* Fast version switching
+* Testing new builds without uninstalling
+* Reverting to older builds for compatibility testing
+
+``Invoke-VSCodeRollback``
+
+Rolls back to the previously installed version of VS Code.
+
+Rollback is:
+* Instant (symlink swap)
+* Deterministic
+* Logged
+* Fully reversible
+
+``Test-VSCodeSymlink``
+
+Validates the integrity of the VS Code symlink used by the updater.
+
+Checks include:
+* Target existence
+* Target validity
+* Permission correctness
+* Path consistency
+
+Useful for diagnosing broken installs or manual tampering.
+
+``Start-VSCodeSafeMode``
+
+Launches VS Code with:
+* All extensions disabled
+* No cached state
+* No workspace restore
+
+This is ideal for diagnosing:
+* startup crashes
+* extension conflicts
+* corrupted state
+
+``Get-VSCodeDashboard``
+
+Displays a structured diagnostic dashboard including:
+* Installed versions
+* Active version
+* Symlink status
+* Installer cache status
+* Last update result
+* Watchdog metrics
+
+Designed for operators and monitoring systems.
+
+``Invoke-ZipFallback``
+
+Extracts and installs VS Code from a ZIP archive when the standard installer fails.
+
+This fallback path is:
+* deterministic
+* logged
+* watchdog‑compatible
+* used automatically when needed
 
 ## Verify Module Load
 
@@ -181,29 +260,29 @@ VSCode-Updater uses a four‑lane deterministic pipeline:
 
 1. Discovery Lane
 
-    - Detect installed version
-    - Query latest available version
-    - Validate cached installer
+    * Detect installed version
+    * Query latest available version
+    * Validate cached installer
 
 2. Acquisition Lane
 
-    - Download installer if required
-    - Cache installer for reuse
-    - Validate file integrity
+    * Download installer if required
+    * Cache installer for reuse
+    * Validate file integrity
 
 3. Execution Lane
 
-    - Launch installer in detached mode
-    - Track installer PID
-    - Monitor filesystem and resource activity
+    * Launch installer in detached mode
+    * Track installer PID
+    * Monitor filesystem and resource activity
 
 4. Watchdog Lane
 
-    - Filesystem stall detection
-    - CPU/Disk idle stall detection
-    - CPU/Disk active stall detection
-    - Automatic retries
-    - Deterministic exit codes
+    * Filesystem stall detection
+    * CPU/Disk idle stall detection
+    * CPU/Disk active stall detection
+    * Automatic retries
+    * Deterministic exit codes
 
 ### Watchdog Behavior
 
@@ -238,11 +317,11 @@ These codes are deterministic and safe for automation, monitoring, and CI/CD pip
 
 #### Logging Behavior
 
-- Single‑line, timestamped entries
-- No banners or multi‑line blocks
-- All watchdog transitions logged
-- All exit paths emit a final banner with exit code
-- Fully audit‑transparent
+* Single‑line, timestamped entries
+* No banners or multi‑line blocks
+* All watchdog transitions logged
+* All exit paths emit a final banner with exit code
+* Fully audit‑transparent
 
 #### Compatibility
 
@@ -275,7 +354,8 @@ See the LICENSE file for details.
 
 These tools are part of the Linktech Engineering operator‑grade ecosystem:
 
-- [NMS_Tools](https://github.com/Linktech-Engineering-LLC/NMS_Tools) — Network Monitoring Suite tools for certificate checks, HTML checks, interface checks, and more.
-- [rust-logger](https://github.com/Linktech-Engineering-LLC/rust-logger) — Structured, deterministic logging library for Rust applications.
-- [licensegen](https://github.com/Linktech-Engineering-LLC/licensegen) — Deterministic license generator with reproducible output and SPDX‑compliant metadata.
-- [BotScanner-Community](https://github.com/Linktech-Engineering-LLC/BotScanner-Community) — Community edition of the BotScanner host and flow inspection framework.
+* [RunUpdates](https://github.com/Linktech-Engineering-LLC/RunUpdates) — Cross‑platform, schema‑driven update orchestrator with deterministic execution, frozen binaries, and operator‑grade logging. Supports Linux, Windows, and macOS with unified stdout‑based update detection.
+* [NMS_Tools](https://github.com/Linktech-Engineering-LLC/NMS_Tools) — Network Monitoring Suite tools for certificate checks, HTML checks, interface checks, and more.
+* [rust-logger](https://github.com/Linktech-Engineering-LLC/rust-logger) — Structured, deterministic logging library for Rust applications.
+* [licensegen](https://github.com/Linktech-Engineering-LLC/licensegen) — Deterministic license generator with reproducible output and SPDX‑compliant metadata.
+* [BotScanner-Community](https://github.com/Linktech-Engineering-LLC/BotScanner-Community) — Community edition of the BotScanner host and flow inspection framework.
