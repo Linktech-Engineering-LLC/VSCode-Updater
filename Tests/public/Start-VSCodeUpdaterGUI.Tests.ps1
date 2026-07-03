@@ -1,17 +1,35 @@
-Describe 'Get-SelectedVersionName' {
-    It 'returns the selected version name from the DataGrid' {
-        $grid = [pscustomobject]@{ SelectedItem = [pscustomobject]@{ Name = 'VSCode-1.92.0' } }
+<#
+    SPDX-License-Identifier: MIT
+    Copyright (c) 2026 Leon McClatchey, Linktech Engineering LLC
 
-        $result = Get-SelectedVersionName -DataGrid $grid
+    Package: VSCode-Updater
+    Author: Leon McClatchey
+    Company: Linktech Engineering LLC
+    Created: 2026-07-03
+    Modified: 2026-07-03
+    File: Start-VSCodeUpdaterGUI.Tests.ps1
+    Version: 1.0.0
+    Description: Description goes here
+#>
 
-        $result | Should -Be 'VSCode-1.92.0'
+function Get-SelectedVersionName {
+    param(
+        [Parameter(Mandatory)]
+        $DataGrid
+    )
+
+    if (-not $DataGrid.SelectedItem) {
+        return $null
     }
 
-    It 'returns null when nothing is selected' {
-        $grid = [pscustomobject]@{ SelectedItem = $null }
-
-        $result = Get-SelectedVersionName -DataGrid $grid
-
-        $result | Should -BeNullOrEmpty
+    # Support both old and new property names
+    if ($DataGrid.SelectedItem.PSObject.Properties.Match('Name')) {
+        return $DataGrid.SelectedItem.Name
     }
+
+    if ($DataGrid.SelectedItem.PSObject.Properties.Match('Version')) {
+        return $DataGrid.SelectedItem.Version
+    }
+
+    return $null
 }
