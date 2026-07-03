@@ -18,6 +18,10 @@ function Invoke-ZipFallback {
         [string]$Reason = "Unknown"
     )
 
+    # Record fallback state for dashboard
+    $script:LastUpdateResult   = "Fallback"
+    $script:LastFallbackReason = $Reason
+
     Write-Log "[FALLBACK] ZIP fallback triggered — Reason: $Reason"
     
     # Ensure cache directory exists
@@ -41,10 +45,13 @@ function Invoke-ZipFallback {
     Write-Log "[FALLBACK] Extracting ZIP to $targetDir"
     Expand-Archive -Path $zipPath -DestinationPath $targetDir -Force
 
+    # FIX: Define $root
+    $root = Join-Path $env:LOCALAPPDATA "Programs"
+
     # Keep only the last 3 versions
-    $versions = Get-ChildItem $root -Directory | Where-Object {
-        $_.Name -like "VSCode-*"
-    } | Sort-Object CreationTime -Descending
+    $versions = Get-ChildItem $root -Directory |
+        Where-Object { $_.Name -like "VSCode-*" } |
+        Sort-Object CreationTime -Descending
 
     $versions | Select-Object -Skip 3 | Remove-Item -Recurse -Force
 
@@ -57,8 +64,7 @@ function Invoke-ZipFallback {
     }
 
     Write-Log "[FALLBACK] Creating symlink to new version"
-    # New-Item -ItemType SymbolicLink -Path $linkPath -Target $targetDir | Out-Null
-    cmd /c mklink /J "$linkPath" "$targetDir" 
+    cmd /c mklink /J "$linkPath" "$targetDir"
 
     # 5. Version retention cleanup
     Manage-VSCodeVersions -Keep 3

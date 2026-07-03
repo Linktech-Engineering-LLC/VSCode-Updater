@@ -1,0 +1,165 @@
+<Window
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="clr-namespace:System;assembly=mscorlib"
+    Title="VSCode Updater"
+    Height="600"
+    Width="900"
+    WindowStartupLocation="CenterScreen"
+    ResizeMode="CanResize">
+
+    <Grid Margin="10">
+
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="200"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="200"/>
+        </Grid.RowDefinitions>
+
+        <!-- Status Bar -->
+        <TextBlock x:Name="TxtStatus"
+                   Grid.ColumnSpan="2"
+                   FontSize="14"
+                   FontWeight="Bold"
+                   Margin="0,0,0,10"/>
+
+        <!-- Status Fields -->
+        <StackPanel Grid.Row="0" Grid.ColumnSpan="2" Margin="0,30,0,10">
+            <TextBox x:Name="TxtActiveVersion"
+                     FontSize="13"
+                     Margin="0,0,0,2"
+                     IsReadOnly="True"
+                     BorderThickness="0"
+                     Background="Transparent"/>
+            <TextBox x:Name="TxtSymlinkTarget"
+                     FontSize="13"
+                     Margin="0,0,0,2"
+                     IsReadOnly="True"
+                     BorderThickness="0"
+                     Background="Transparent"/>
+            <TextBox x:Name="TxtSymlinkValid"
+                     FontSize="13"
+                     Margin="0,0,0,2"
+                     IsReadOnly="True"
+                     BorderThickness="0"
+                     Background="Transparent"/>
+            <TextBox x:Name="TxtLastUpdate"
+                     FontSize="13"
+                     Margin="0,0,0,2"
+                     IsReadOnly="True"
+                     BorderThickness="0"
+                     Background="Transparent"/>
+            <TextBox x:Name="TxtFallbackReason"
+                     FontSize="13"
+                     Margin="0,0,0,2"
+                     IsReadOnly="True"
+                     BorderThickness="0"
+                     Background="Transparent"/>
+        </StackPanel>
+
+        <!-- Main Section -->
+        <Grid Grid.Row="1" Grid.ColumnSpan="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="200"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Buttons (2 columns) -->
+            <Grid Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Top">
+
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="35"/>
+                    <RowDefinition Height="35"/>
+                    <RowDefinition Height="35"/>
+                    <RowDefinition Height="35"/>
+                    <RowDefinition Height="35"/>
+                    <RowDefinition Height="35"/>
+                </Grid.RowDefinitions>
+
+                <!-- Column 1 -->
+                <Button x:Name="BtnUpdate" Grid.Row="0" Grid.Column="0" Content="Update" Margin="0,0,5,10"/>
+                <Button x:Name="BtnRollback" Grid.Row="1" Grid.Column="0" Content="Rollback" Margin="0,0,5,10"/>
+                <Button x:Name="BtnSwitch" Grid.Row="2" Grid.Column="0" Content="Switch Version" Margin="0,0,5,10"/>
+                <Button x:Name="BtnValidateSymlink" Grid.Row="3" Grid.Column="0" Content="Validate Symlink" Margin="0,0,5,10"/>
+
+                <!-- Column 2 -->
+                <Button x:Name="BtnSafeMode" Grid.Row="0" Grid.Column="1" Content="Safe Mode" Margin="5,0,0,10"/>
+                <Button x:Name="BtnDashboard" Grid.Row="1" Grid.Column="1" Content="Dashboard" Margin="5,0,0,10"/>
+            </Grid>
+
+            <!-- DataGrid -->
+            <DataGrid x:Name="DgVersions"
+                      Grid.Column="1"
+                      Margin="10,0,0,0"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      HeadersVisibility="Column"
+                      RowHeaderWidth="0"
+                      GridLinesVisibility="All"
+                      SelectionMode="Single"
+                      SelectionUnit="FullRow"
+                      VerticalAlignment="Top"
+                      Height="150">
+
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Version"
+                                        Binding="{Binding Name}"
+                                        Width="150"/>
+                    <DataGridTextColumn Header="Path"
+                                        Binding="{Binding FullName}"
+                                        Width="*"/>
+                    <DataGridTextColumn Header="Last Modified"
+                                        Binding="{Binding LastWriteTime, StringFormat={}{0:yyyy-MM-dd HH:mm:ss}}"
+                                        Width="150"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Grid>
+
+        <!-- Log Controls + Viewer (single unified block) -->
+        <Grid Grid.Row="2" Grid.ColumnSpan="2" Margin="0,10,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>   <!-- controls -->
+                <RowDefinition Height="*"/>      <!-- viewer -->
+            </Grid.RowDefinitions>
+
+            <!-- Controls row -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,5">
+                <Button x:Name="BtnPauseLog"
+                        Content="Pause Log"
+                        Height="30"
+                        Width="100"
+                        Margin="0,0,10,0"/>
+                <CheckBox x:Name="ChkAutoScroll"
+                        Content="Auto Scroll"
+                        Margin="0,0,20,0"
+                        VerticalAlignment="Center"
+                        IsChecked="True"/>
+                <TextBox x:Name="TxtSearchLog"
+                        Width="200"
+                        Height="25"
+                        Margin="0,0,10,0"/>
+                <Button x:Name="BtnSearchLog"
+                        Content="Search"
+                        Width="80"
+                        Height="25"/>
+            </StackPanel>
+
+            <!-- Log viewer row -->
+            <TextBox x:Name="TxtLog"
+                    Grid.Row="1"
+                    TextWrapping="Wrap"
+                    VerticalScrollBarVisibility="Auto"
+                    IsReadOnly="True"/>
+        </Grid>
+    </Grid>
+</Window>
