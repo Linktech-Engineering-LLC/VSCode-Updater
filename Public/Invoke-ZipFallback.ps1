@@ -67,7 +67,7 @@ function Invoke-ZipFallback {
     cmd /c mklink /J "$linkPath" "$targetDir"
 
     # 5. Version retention cleanup
-    Manage-VSCodeVersions -Keep 3
+    Update-VSCodeVersions -Keep 3
 
     Write-Log "[FALLBACK] ZIP fallback completed successfully"
     return 0
