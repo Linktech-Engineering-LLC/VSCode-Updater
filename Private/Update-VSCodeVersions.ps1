@@ -1,4 +1,4 @@
-function Manage-VSCodeVersions {
+function Update-VSCodeVersions {
     [CmdletBinding()]
     param(
         [int]$Keep = 3

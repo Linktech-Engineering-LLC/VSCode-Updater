@@ -16,21 +16,35 @@ function Start-VSCodeSafeMode {
     [CmdletBinding()]
     param()
 
-    $codeExe = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe"
+    _out "=== UPDATER SAFE MODE STARTED ===" "Yellow"
 
-    if (-not (Test-Path $codeExe)) {
-        Write-Log "[SAFE] Code.exe not found"
-        return 70
+    # Read-only diagnostics
+    $info     = Get-VSCodeSymlinkInfo
+    $versions = Get-VSCodeVersions
+    $proc = Get-Process -Name "Code" -ErrorAction SilentlyContinue | Select-Object -First 1
+
+    _out "Scanning VS Code environment..." "LightGray"
+
+    # Versions
+    _out "Available Versions:" "LightBlue"
+    foreach ($v in $versions) {
+        _out " - $v"
     }
 
-    Write-Log "[SAFE] Launching VS Code in safe mode"
+    # Symlink info
+    _out "Symlink Target: $($info.TargetPath)"
+    _out "Symlink Valid:  $($info.IsValid)"
+    _out "Active Version: $($info.ActiveVersion)" "LightGreen"
 
-    Start-Process $codeExe -ArgumentList @(
-        "--disable-extensions",
-        "--disable-gpu",
-        "--disable-workspace-trust",
-        "--disable-crash-reporter",
-        "--disable-telemetry",
-        "--user-data-dir", "`"$env:TEMP\VSCodeSafeMode`""
-    )
+    # Process info
+    if ($proc) {
+        _out "VS Code Running (PID $($proc.Id))" "LightGreen"
+        _out ("Memory: {0:N2} MB" -f ($proc.WorkingSet64 / 1MB)) "LightGray"
+        _out ("CPU Time: {0:N2} sec" -f $proc.CPU) "LightGray"
+    }
+    else {
+        _out "VS Code is not running." "Red"
+    }
+
+    _out "=== UPDATER SAFE MODE COMPLETE ===" "Yellow"
 }

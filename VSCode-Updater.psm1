@@ -30,6 +30,10 @@ function Update-VSCode {
         [int]$RetryCount = 3,
         [int]$IdleTimeout = 600
     )
+    if ($script:SafeMode) {
+        _out "SAFE MODE — Update skipped." "Yellow"
+        return
+    }
     $MaxRetries = 5   # hard ceiling for safety
 
     # =====================================================================
@@ -37,7 +41,7 @@ function Update-VSCode {
     # =====================================================================
 
     $scriptName    = "Update-VSCode"
-    $scriptVersion = "2.1.0"
+    $scriptVersion = "2.2.0"
 
     $codeExe    = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe"
     $codeRoot   = Split-Path $codeExe -Parent

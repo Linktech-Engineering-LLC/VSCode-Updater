@@ -18,7 +18,10 @@ function Switch-VSCodeVersion {
         [Parameter(Mandatory)]
         [string]$VersionName
     )
-
+    if ($script:SafeMode) {
+        _out "SAFE MODE — Switch skipped." "Yellow"
+        return
+    }
     $root = Join-Path $env:LOCALAPPDATA "Programs"
     $target = Join-Path $root $VersionName
     $linkPath = Join-Path $root "Microsoft VS Code"

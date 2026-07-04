@@ -8,7 +8,7 @@
     Created: 2026-04-23
     Modified: 2026-05-20
     File: Sync.ps1
-    Version: 1.0.1
+    Version: 1.0.2
     Description: Deterministically synchronize the repo version of VSCode-Updater
              into the user's installed PowerShell module path.
 #>
@@ -28,7 +28,25 @@
     If ANY mismatch is detected, a full sync is performed.
 #>
 
-Write-Host "=== VSCode-Updater Sync ==="
+function Write-SyncLog {
+    param([string]$Message)
+    $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    Add-Content -Path $LogFile -Value "$ts  $Message"
+}
+
+Write-Host "=== VSCode-Updater Sync ==="$ModuleItems = @(
+    "VSCode-Updater.psm1",
+    "VSCode-Updater.psd1",
+    "Private",
+    "Public"
+)
+
+$ModuleItems = @(
+    "VSCode-Updater.psm1",
+    "VSCode-Updater.psd1",
+    "Private",
+    "Public"
+)
 
 # =====================================================================
 # Resolve Paths
@@ -36,7 +54,7 @@ Write-Host "=== VSCode-Updater Sync ==="
 
 # Repo root = parent of Tools\
 $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$RepoRoot   = "C:\Users\ldmcc\Nextcloud\Projects\Scripts\PowerShell\VSCode-Updater"
+$RepoRoot   = Split-Path -Parent $ScriptRoot
 
 # The module lives directly in the repo root (not nested)
 $RepoModule = $RepoRoot
@@ -71,12 +89,6 @@ if (-not (Test-Path $LogRoot)) {
 
 $LogFile = Join-Path $LogRoot "Sync.log"
 
-function Write-SyncLog {
-    param([string]$Message)
-    $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-    Add-Content -Path $LogFile -Value "$ts  $Message"
-}
-
 Write-SyncLog "==============================================================="
 Write-SyncLog "VSCode-Updater Sync Started"
 Write-SyncLog "Repo:    $RepoModule"
@@ -87,19 +99,27 @@ Write-SyncLog "==============================================================="
 # Drift Detection (Simple + Deterministic)
 # =====================================================================
 
-$repoFiles   = Get-ChildItem -Path $RepoModule -Recurse -File
+$repoFiles = foreach ($item in $ModuleItems) {
+    $path = Join-Path $RepoModule $item
+    if (Test-Path $path) {
+        Get-ChildItem -Path $path -Recurse -File
+    }
+}
 $moduleFiles = Get-ChildItem -Path $ModuleRoot -Recurse -File -ErrorAction SilentlyContinue
 
 $repoCount   = $repoFiles.Count
 $moduleCount = $moduleFiles.Count
 
+$DoFullSync = $false
+
+# 1) Count drift
 if ($repoCount -ne $moduleCount) {
     Write-Host "File count mismatch — syncing."
     Write-SyncLog "File count mismatch — performing FULL SYNC."
     $DoFullSync = $true
 }
 else {
-    # Compare LastWriteTime for drift detection
+    # 2) Timestamp drift
     $drift = $false
     foreach ($file in $repoFiles) {
         $relative = $file.FullName.Substring($RepoModule.Length).TrimStart('\')
@@ -124,12 +144,13 @@ else {
         Write-SyncLog "Drift detected — performing FULL SYNC."
         $DoFullSync = $true
     }
-    else {
-        Write-Host "No drift detected — module is up to date."
-        Write-SyncLog "No drift detected — module is up to date."
-        Write-SyncLog "==============================================================="
-        return
-    }
+}
+
+if (-not $DoFullSync) {
+    Write-Host "No drift detected — module is up to date."
+    Write-SyncLog "No drift detected — module is up to date."
+    Write-SyncLog "==============================================================="
+    return
 }
 
 # =====================================================================
@@ -139,20 +160,19 @@ else {
 Write-Host "Performing SYNC..."
 Write-SyncLog "Performing SYNC..."
 
-$ModuleItems = @(
-    "VSCode-Updater.psm1",
-    "VSCode-Updater.psd1",
-    "Private",
-    "Public"
-)
-
 # Remove orphaned files in module folder
-$moduleExisting = Get-ChildItem -Path $ModuleRoot -Recurse -File -ErrorAction SilentlyContinue
+$moduleExisting = Get-ChildItem -Path $ModuleRoot -Recurse -File
+
 foreach ($file in $moduleExisting) {
     $relative = $file.FullName.Substring($ModuleRoot.Length).TrimStart('\')
-    $source   = Join-Path $RepoRoot $relative
 
-    if (-not (Test-Path $source)) {
+    $source = $ModuleItems | ForEach-Object {
+        Join-Path $RepoRoot $_
+    } | Where-Object {
+        Test-Path (Join-Path $_ $relative)
+    }
+
+    if (-not $source) {
         Write-SyncLog "Removing orphaned file: $relative"
         Remove-Item $file.FullName -Force
     }

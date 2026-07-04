@@ -1,7 +1,10 @@
 function Invoke-VSCodeRollback {
     [CmdletBinding()]
     param()
-
+    if ($script:SafeMode) {
+        _out "SAFE MODE — Rollback skipped." "Yellow"
+        return
+    }
     $root = Join-Path $env:LOCALAPPDATA "Programs"
     $prefix = "VSCode-"
     $linkPath = Join-Path $root "Microsoft VS Code"
