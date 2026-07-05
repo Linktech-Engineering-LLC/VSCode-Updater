@@ -26,6 +26,11 @@
 
         <!-- STATUS -->
         <StackPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,10,0">
+            <TextBlock x:Name="TxtStatus"
+                    FontSize="16"
+                    FontWeight="Bold"
+                    Foreground="Black"
+                    Margin="0,0,0,12"/>
             <TextBlock Text="Active Version:" FontWeight="Bold" FontSize="13" Foreground="Black"/>
             <TextBox x:Name="TxtActiveVersion" FontSize="12" IsReadOnly="True" BorderThickness="0" Background="Transparent"/>
             <TextBox x:Name="TxtSymlinkTarget" FontSize="12" IsReadOnly="True" BorderThickness="0" Background="Transparent"/>

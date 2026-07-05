@@ -26,7 +26,7 @@ function Get-SelectedVersionName {
         [object]$DataGrid
     )
 
-    if ($null -eq $DataGrid -or $null -eq $DataGrid.SelectedItem) {
+    if (-not $DataGrid.SelectedItem) {
         return $null
     }
 

@@ -44,10 +44,9 @@ function Write-TerminalLine {
         $paragraph.Inlines.Add($run)
 
         # ⭐ Add new lines at the top instead of the bottom
-        $txtCommandOutput.Document.Blocks.InsertBefore(
-            $txtCommandOutput.Document.Blocks.FirstBlock,
-            $paragraph
-        )
+        $txtCommandOutput.Document.Blocks.Add($paragraph)
+        $txtCommandOutput.CaretPosition = $txtCommandOutput.Document.ContentEnd
+        $txtCommandOutput.ScrollToEnd()
 
         # ⭐ Keep the caret at the start so the newest line is visible
         $txtCommandOutput.CaretPosition = $txtCommandOutput.Document.ContentStart
