@@ -12,19 +12,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Register PSGallery
-        shell: pwsh
-        run: |
-          Register-PSRepository -Default -ErrorAction SilentlyContinue
-          Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted
-
-      - name: Install Pester
-        shell: pwsh
-        run: Install-Module Pester -Force -Scope CurrentUser
-
       - name: Run Tests
         shell: pwsh
         run: |
+          # Fix PSGallery
+          Unregister-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
+          Register-PSRepository -Name PSGallery `
+            -SourceLocation "https://www.powershellgallery.com/api/v2" `
+            -InstallationPolicy Trusted `
+            -PackageManagementProvider NuGet
+
+          # Install Pester
+          Install-Module Pester -Force -Scope CurrentUser
+
+          # Import your module
           Import-Module "$env:GITHUB_WORKSPACE/VSCode-Updater.psm1" -Force
-          Get-Command Get-SelectedVersionName | Format-List *
+
+          # Run tests
           Invoke-Pester -Path Tests -Output Detailed
