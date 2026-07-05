@@ -35,14 +35,23 @@ function Write-TerminalLine {
         }
 
         $paragraph = New-Object System.Windows.Documents.Paragraph
-        $paragraph.Margin = [System.Windows.Thickness]::new(0)   # ← THIS FIXES DOUBLE SPACING
+        $paragraph.Margin = [System.Windows.Thickness]::new(0)
 
         $run = New-Object System.Windows.Documents.Run
         $run.Text = $Text
         $run.Foreground = $Color
 
         $paragraph.Inlines.Add($run)
-        $txtCommandOutput.Document.Blocks.Add($paragraph)
-        $txtCommandOutput.ScrollToEnd()
+
+        # ⭐ Add new lines at the top instead of the bottom
+        $txtCommandOutput.Document.Blocks.InsertBefore(
+            $txtCommandOutput.Document.Blocks.FirstBlock,
+            $paragraph
+        )
+
+        # ⭐ Keep the caret at the start so the newest line is visible
+        $txtCommandOutput.CaretPosition = $txtCommandOutput.Document.ContentStart
+        $txtCommandOutput.ScrollToHome()
+        $txtCommandOutput.UpdateLayout()
     })
 }
