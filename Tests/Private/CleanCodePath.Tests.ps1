@@ -1,3 +1,17 @@
+<#
+    SPDX-License-Identifier: MIT
+    Copyright (c) 2026 Leon McClatchey, Linktech Engineering LLC
+
+    Package: VSCode-Updater
+    Author: Leon McClatchey
+    Company: Linktech Engineering LLC
+    Created: 2026-07-05
+    Modified: 2026-07-05
+    File: CleanCodePath.Tests.ps1
+    Version: 1.0.0
+    Description: Description goes here
+#>
+
 Describe "CleanCodePath" {
     BeforeAll {
         . "$PSScriptRoot/../../Private/CleanCodePath.ps1"
@@ -10,7 +24,7 @@ Describe "CleanCodePath" {
 
         CleanCodePath -Path "C:\Fake"
 
-        Assert-MockCalled Write-Log -Times 1 -ParameterFilter { $Message -match "skipping" }
+        Assert-MockCalled Write-Log -Times 1 -ParameterFilter { $Message -match "Skipping" }
     }
 
     It "removes lock files" {

@@ -15,10 +15,28 @@ function Cleanup-InnoSetupWorkers {
     Write-Log "[CLEANUP] Checking for InnoSetup workers"
 
     $workers = Get-Process -ErrorAction SilentlyContinue |
-        Where-Object { $_.Path -like "$env:TEMP\is-*.tmp" }
+        Where-Object {
+            # Some workers have no path at all
+            ($_.ProcessName -match '^is-[A-Za-z0-9]+(\.tmp|\.tmp\.exe)?$') -or
+            ($_.Path -and ($_.Path -match 'is-[A-Za-z0-9]+\.tmp')) -or
+            ($_.CommandLine -and ($_.CommandLine -match 'is-[A-Za-z0-9]+\.tmp'))
+        }
 
     if ($workers) {
         Write-Log "[CLEANUP] Terminating InnoSetup worker PIDs: $($workers.Id -join ', ')"
         $workers | Stop-Process -Force -ErrorAction SilentlyContinue
+    }
+
+    # Also catch CodeSetup helpers (consistent with your other cleanup script)
+    $helpers = Get-Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            ($_.ProcessName -eq 'VSCodeSetup.tmp') -or
+            ($_.CommandLine -match 'CodeSetup') -or
+            ($_.CommandLine -match 'VSCodeSetup')
+        }
+
+    if ($helpers) {
+        Write-Log "[CLEANUP] Terminating VS Code installer helpers: $($helpers.Id -join ', ')"
+        $helpers | Stop-Process -Force -ErrorAction SilentlyContinue
     }
 }

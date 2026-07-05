@@ -18,13 +18,17 @@ function Get-SelectedVersionName {
         [object]$DataGrid
     )
 
-    if (-not $DataGrid.SelectedItem) {
-        return $null
+    $item = $DataGrid.SelectedItem
+    if (-not $item) { return $null }
+
+    # Prefer Name (GUI standard)
+    if ($item.PSObject.Properties.Name -contains 'Name') {
+        return [string]$item.Name
     }
 
-    $selectedItem = $DataGrid.SelectedItem
-    if ($selectedItem.PSObject.Properties.Name -contains 'Name') {
-        return [string]$selectedItem.Name
+    # Fallback for older tests or alternate data sources
+    if ($item.PSObject.Properties.Name -contains 'Version') {
+        return [string]$item.Version
     }
 
     return $null

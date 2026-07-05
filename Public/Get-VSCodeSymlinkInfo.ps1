@@ -13,33 +13,50 @@
 #>
 function Get-VSCodeSymlinkInfo {
 
-    $root = Join-Path $env:LOCALAPPDATA "Programs"
+    $root        = Join-Path $env:LOCALAPPDATA "Programs"
     $symlinkPath = Join-Path $root "Microsoft VS Code"
 
     $info = [PSCustomObject]@{
         ActiveVersion       = $null
         TargetPath          = $null
+        LinkType            = $null
         IsValid             = $false
         LastUpdateResult    = $script:LastUpdateResult
         LastFallbackReason  = $script:LastFallbackReason
     }
 
     if (-not (Test-Path $symlinkPath)) {
+        Write-Log "[SYMLINK] Symlink missing: $symlinkPath"
         return $info
     }
 
     try {
-        $target = (Get-Item $symlinkPath).Target
+        $item = Get-Item $symlinkPath -ErrorAction Stop
+        $info.LinkType = $item.LinkType
+
+        # Extract target for both symlink and junction
+        $target = $item.Target
         $info.TargetPath = $target
 
-        if (Test-Path $target) {
-            $info.IsValid = $true
-        }
+        # Validate target
+        if ($target -and (Test-Path $target)) {
 
-        $info.ActiveVersion = Split-Path $target -Leaf
+            # Validate folder structure
+            $codeExe = Join-Path $target "Code.exe"
+            if (Test-Path $codeExe) {
+                $info.IsValid = $true
+                $info.ActiveVersion = Split-Path $target -Leaf
+            }
+            else {
+                Write-Log "[SYMLINK] Target exists but missing Code.exe: $target"
+            }
+        }
+        else {
+            Write-Log "[SYMLINK] Target missing or invalid: $target"
+        }
     }
     catch {
-        # leave defaults
+        Write-Log "[SYMLINK] Failed to read symlink: $($_.Exception.Message)"
     }
 
     return $info

@@ -11,62 +11,98 @@
     Version: 1.0.0
     Description: Retrieves the zipped VSCode package and installs it
 #>
-
 function Invoke-ZipFallback {
     [CmdletBinding()]
     param(
         [string]$Reason = "Unknown"
     )
 
-    # Record fallback state for dashboard
+    if ($script:SafeMode) {
+        _out "SAFE MODE — ZIP fallback skipped." "Yellow"
+        return 0
+    }
+
+    # Record fallback state
     $script:LastUpdateResult   = "Fallback"
     $script:LastFallbackReason = $Reason
 
     Write-Log "[FALLBACK] ZIP fallback triggered — Reason: $Reason"
-    
-    # Ensure cache directory exists
+
+    # Cache directory
     $cacheDir = Join-Path $PSScriptRoot "..\Cache"
     if (-not (Test-Path $cacheDir)) {
         New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
     }
 
-    # 1. Determine latest version ZIP URL
-    $zipUrl = "https://update.code.visualstudio.com/latest/win32-x64-archive/stable"
-
-    # 2. Download ZIP to cache
+    # ZIP URL
+    $zipUrl  = "https://update.code.visualstudio.com/latest/win32-x64-archive/stable"
     $zipPath = Join-Path $cacheDir "VSCode.zip"
-    Write-Log "[FALLBACK] Downloading ZIP archive"
-    Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
 
-    # 3. Extract to versioned folder
-    $version = (Get-Date).ToString("yyyyMMdd-HHmmss")
+    # Download with retry
+    Write-Log "[FALLBACK] Downloading ZIP archive"
+    for ($i = 1; $i -le 3; $i++) {
+        try {
+            Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing -ErrorAction Stop
+            break
+        }
+        catch {
+            Write-Log "[FALLBACK] Download attempt $i failed: $($_.Exception.Message)"
+            Start-Sleep -Milliseconds 300
+        }
+    }
+
+    if (-not (Test-Path $zipPath)) {
+        Write-Log "[FALLBACK] ZIP download failed — no file present"
+        return 95
+    }
+
+    # Validate ZIP size
+    $info = Get-Item $zipPath -ErrorAction SilentlyContinue
+    if ($info.Length -lt 1MB) {
+        Write-Log "[FALLBACK] ZIP too small (<1MB) — invalid download"
+        return 96
+    }
+
+    # Extract
+    $version   = (Get-Date).ToString("yyyyMMdd-HHmmss")
     $targetDir = Join-Path $env:LOCALAPPDATA "Programs\VSCode-$version"
 
     Write-Log "[FALLBACK] Extracting ZIP to $targetDir"
-    Expand-Archive -Path $zipPath -DestinationPath $targetDir -Force
-
-    # FIX: Define $root
-    $root = Join-Path $env:LOCALAPPDATA "Programs"
-
-    # Keep only the last 3 versions
-    $versions = Get-ChildItem $root -Directory |
-        Where-Object { $_.Name -like "VSCode-*" } |
-        Sort-Object CreationTime -Descending
-
-    $versions | Select-Object -Skip 3 | Remove-Item -Recurse -Force
-
-    # 4. Replace broken install with symlink
-    $linkPath = "$env:LOCALAPPDATA\Programs\Microsoft VS Code"
-
-    if (Test-Path $linkPath) {
-        Write-Log "[FALLBACK] Removing existing VS Code directory/symlink"
-        Remove-Item $linkPath -Recurse -Force
+    try {
+        Expand-Archive -Path $zipPath -DestinationPath $targetDir -Force
+    }
+    catch {
+        Write-Log "[FALLBACK] ZIP extraction failed: $($_.Exception.Message)"
+        return 97
     }
 
-    Write-Log "[FALLBACK] Creating symlink to new version"
-    cmd /c mklink /J "$linkPath" "$targetDir"
+    # Validate extracted folder
+    $codeExe = Join-Path $targetDir "Code.exe"
+    if (-not (Test-Path $codeExe)) {
+        Write-Log "[FALLBACK] Extracted folder missing Code.exe — invalid fallback"
+        return 98
+    }
 
-    # 5. Version retention cleanup
+    # Symlink path
+    $linkPath = Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code"
+
+    # Remove old symlink/junction
+    if (Test-Path $linkPath) {
+        Write-Log "[FALLBACK] Removing existing VS Code directory/symlink"
+        Remove-Item $linkPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    # Create new junction
+    Write-Log "[FALLBACK] Creating junction to new version"
+    try {
+        cmd /c mklink /J "$linkPath" "$targetDir" | Out-Null
+    }
+    catch {
+        Write-Log "[FALLBACK] Failed to create junction: $($_.Exception.Message)"
+        return 99
+    }
+
+    # Prune old versions
     Update-VSCodeVersions -Keep 3
 
     Write-Log "[FALLBACK] ZIP fallback completed successfully"

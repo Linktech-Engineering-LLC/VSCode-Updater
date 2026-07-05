@@ -11,9 +11,12 @@
     Version: 1.0.0
     Description: Description goes here
 #>
+# Load the module from the repo BEFORE entering InModuleScope
 
 InModuleScope VSCode-Updater {
+
     Describe 'Get-SelectedVersionName' {
+
         It 'returns the selected version name from the DataGrid' {
             $grid = [pscustomobject]@{ SelectedItem = [pscustomobject]@{ Name = 'VSCode-1.92.0' } }
 
@@ -28,6 +31,14 @@ InModuleScope VSCode-Updater {
             $result = Get-SelectedVersionName -DataGrid $grid
 
             $result | Should -BeNullOrEmpty
+        }
+
+        It 'returns Version when Name is missing' {
+            $grid = [pscustomobject]@{ SelectedItem = [pscustomobject]@{ Version = 'VSCode-1.92.0' } }
+
+            $result = Get-SelectedVersionName -DataGrid $grid
+
+            $result | Should -Be 'VSCode-1.92.0'
         }
     }
 }

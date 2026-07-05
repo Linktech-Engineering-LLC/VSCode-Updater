@@ -14,13 +14,47 @@
 function Get-FileHashSafe {
     param([string]$Path)
 
-    if (-not (Test-Path $Path)) { return $null }
+    if (-not (Test-Path $Path)) {
+        Write-Log "[HASH] File not found: $Path"
+        return $null
+    }
 
+    # --- Hydration attempt (OneDrive / cloud providers) ---
+    try {
+        $null = Get-Content -Path $Path -ErrorAction Stop
+    }
+    catch {
+        Write-Log "[HASH] Hydration attempt failed for $Path : $($_.Exception.Message)"
+    }
+
+    # --- First attempt ---
     try {
         return (Get-FileHash -Algorithm SHA256 -Path $Path).Hash
     }
     catch {
-        Write-Log "[ERROR] Failed to compute hash for $Path : $($_.Exception.Message)"
+        Write-Log "[HASH] First hash attempt failed for $Path : $($_.Exception.Message)"
+    }
+
+    # --- Retry after short delay ---
+    Start-Sleep -Milliseconds 150
+    try {
+        return (Get-FileHash -Algorithm SHA256 -Path $Path).Hash
+    }
+    catch {
+        Write-Log "[HASH] Second hash attempt failed for $Path : $($_.Exception.Message)"
+    }
+
+    # --- Manual fallback hashing ---
+    try {
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        $stream = [System.IO.File]::OpenRead($Path)
+        $hashBytes = $sha.ComputeHash($stream)
+        $stream.Close()
+
+        return ([BitConverter]::ToString($hashBytes) -replace "-", "").ToLower()
+    }
+    catch {
+        Write-Log "[HASH] Manual SHA256 fallback failed for $Path : $($_.Exception.Message)"
         return $null
     }
 }

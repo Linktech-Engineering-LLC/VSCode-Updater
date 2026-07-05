@@ -28,7 +28,9 @@
         'Start-VSCodeSafeMode',
         'Get-VSCodeDashboard',
         'Invoke-ZipFallback',
-        'Get-VSCodeSymlinkInfo'
+        'Get-VSCodeSymlinkInfo',
+        'Get-VSCodeLastResult',
+        'Set-VSCodeSafeMode'
     )
 
     PrivateData = @{

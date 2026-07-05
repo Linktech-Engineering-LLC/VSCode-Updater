@@ -1,19 +1,30 @@
+<#
+    SPDX-License-Identifier: MIT
+    Copyright (c) 2026 Leon McClatchey, Linktech Engineering LLC
+
+    Package: VSCode-Updater
+    Author: Leon McClatchey
+    Company: Linktech Engineering LLC
+    Created: 2026-07-05
+    Modified: 2026-07-05
+    File: Cleanup-VSCodeHelpers.Test.ps1
+    Version: 1.0.0
+    Description: Description goes here
+#>
+
 # Requires -Version 7.0
 # Pester 5.x test for Cleanup-VSCodeHelpers
 
 Describe "Cleanup-VSCodeHelpers" -Tag 'Private' {
 
     BeforeAll {
-        # Import the function under test
         . "$PSScriptRoot/../../Private/Cleanup-VSCodeHelpers.ps1"
         . "$PSScriptRoot/../../Private/Write-Log.ps1"
-
     }
 
     Context "When helper processes exist" {
 
         BeforeEach {
-            # Mock Get-Process to simulate running processes
             Mock -CommandName Get-Process -MockWith {
                 @(
                     [pscustomobject]@{ Name = "Code"; Id = 101 }
@@ -23,14 +34,12 @@ Describe "Cleanup-VSCodeHelpers" -Tag 'Private' {
                 )
             }
 
-            # Mock Stop-Process to track calls
             Mock -CommandName Stop-Process
+            Mock Write-Log {}
         }
 
         It "terminates all matching helper processes" {
             Cleanup-VSCodeHelpers
-
-            # Validate Stop-Process was called for each PID
             Should -Invoke -CommandName Stop-Process -Times 4
         }
     }
@@ -40,11 +49,11 @@ Describe "Cleanup-VSCodeHelpers" -Tag 'Private' {
         BeforeEach {
             Mock -CommandName Get-Process -MockWith { @() }
             Mock -CommandName Stop-Process
+            Mock Write-Log {}
         }
 
         It "does not attempt to terminate anything" {
             Cleanup-VSCodeHelpers
-
             Should -Invoke -CommandName Stop-Process -Times 0
         }
     }

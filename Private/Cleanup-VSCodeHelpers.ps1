@@ -14,25 +14,38 @@
 function Cleanup-VSCodeHelpers {
     Write-Log "[CLEANUP] Checking for VS Code and installer helper processes"
 
-    $targets = @(
-        "Code",
-        "CodeHelper",
-        "CodeHelperCP",
-        "CodeHelperRenderer",
-        "CodeHelperWebView",
-        "CodeHelperGPU",
-        "CodeSetup",
-        "Setup",
-        "Uninstall",
-        "VSCodeSetup",
-        "VSCodeSetup.tmp"
-    )
+    $procs = Get-Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            # VS Code main process
+            ($_.ProcessName -eq "Code") -or
 
-    foreach ($t in $targets) {
-        $procs = Get-Process -Name $t -ErrorAction SilentlyContinue
-        if ($procs) {
-            Write-Log "[CLEANUP] Terminating $t PIDs: $($procs.Id -join ', ')"
-            $procs | Stop-Process -Force -ErrorAction SilentlyContinue
+            # VS Code helper processes (all variants)
+            ($_.ProcessName -like "CodeHelper*") -or
+
+            # Setup / installer processes
+            ($_.ProcessName -match "CodeSetup") -or
+            ($_.ProcessName -match "VSCodeSetup") -or
+            ($_.ProcessName -match "Setup") -or
+            ($_.ProcessName -match "Uninstall") -or
+
+            # Temp-based helpers
+            ($_.ProcessName -match "^is-[A-Za-z0-9]+(\.tmp|\.tmp\.exe)?$") -or
+            ($_.ProcessName -match "tmp$") -or
+            ($_.ProcessName -match "tmp\.exe$") -or
+
+            # Path-based detection (when available)
+            ($_.Path -and ($_.Path -match "CodeSetup")) -or
+            ($_.Path -and ($_.Path -match "VSCodeSetup")) -or
+            ($_.Path -and ($_.Path -match "is-[A-Za-z0-9]+\.tmp")) -or
+
+            # Command-line detection (covers PowerShell spawns)
+            ($_.CommandLine -and ($_.CommandLine -match "CodeSetup")) -or
+            ($_.CommandLine -and ($_.CommandLine -match "VSCodeSetup")) -or
+            ($_.CommandLine -and ($_.CommandLine -match "is-[A-Za-z0-9]+\.tmp"))
         }
+
+    if ($procs) {
+        Write-Log "[CLEANUP] Terminating helper PIDs: $($procs.Id -join ', ')"
+        $procs | Stop-Process -Force -ErrorAction SilentlyContinue
     }
 }

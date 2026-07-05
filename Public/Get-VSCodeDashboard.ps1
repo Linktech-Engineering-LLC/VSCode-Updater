@@ -16,37 +16,52 @@ function Get-VSCodeDashboard {
     [CmdletBinding()]
     param()
 
-    $root = Join-Path $env:LOCALAPPDATA "Programs"
+    $root     = Join-Path $env:LOCALAPPDATA "Programs"
     $linkPath = Join-Path $root "Microsoft VS Code"
 
-    $symlinkOK = Test-VSCodeSymlink
+    # Symlink info (more reliable than .Target)
+    $info        = Get-VSCodeSymlinkInfo
+    $symlinkOK   = $info.IsValid
+    $currentTarget = $info.Target
+
+    # Installed versions
     $versions = Get-VSCodeVersions
 
-    $currentTarget = $null
-    if (Test-Path $linkPath) {
-        $currentTarget = (Get-Item $linkPath).Target
+    # Launch test (Safe Mode aware)
+    $launchOK = $false
+    $codeExe  = Join-Path $linkPath "Code.exe"
+
+    if (-not $script:SafeMode -and (Test-Path $codeExe)) {
+        try {
+            $p = Start-Process $codeExe -PassThru -ErrorAction Stop
+            Start-Sleep -Milliseconds 1200
+            $launchOK = -not $p.HasExited
+            if ($launchOK) { $p | Stop-Process -Force }
+        }
+        catch { }
     }
 
-    $codeExe = Join-Path $linkPath "Code.exe"
-    $launchOK = $false
-
+    # Cache path (safe resolution)
+    $cachePath = $null
     try {
-        $p = Start-Process $codeExe -PassThru -ErrorAction Stop
-        Start-Sleep -Milliseconds 800
-        $launchOK = -not $p.HasExited
-        if ($launchOK) { $p | Stop-Process -Force }
+        $cachePath = (Resolve-Path (Join-Path $PSScriptRoot "..\Cache")).Path
     }
     catch { }
 
+    # Last update log
+    $lastLog = Get-ChildItem "$env:TEMP" -Filter "VSCodeUpdater*.log" -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+
     [PSCustomObject]@{
         SymlinkValid      = $symlinkOK
-        LinkType          = if (Test-Path $linkPath) { (Get-Item $linkPath).LinkType } else { $null }
+        LinkType          = $info.LinkType
         CurrentTarget     = $currentTarget
         Launches          = $launchOK
-        InstalledVersions = $versions.Name -join ", "
+        InstalledVersions = $versions.Name
         VersionCount      = $versions.Count
         ActiveVersion     = if ($currentTarget) { Split-Path $currentTarget -Leaf } else { $null }
-        CachePath         = Join-Path $PSScriptRoot "..\Cache"
-        LastUpdateLog     = (Get-ChildItem "$env:TEMP" -Filter "VSCodeUpdater*.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+        CachePath         = $cachePath
+        LastUpdateLog     = if ($lastLog) { $lastLog.FullName } else { $null }
     }
 }

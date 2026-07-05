@@ -50,6 +50,7 @@
                          Padding="6"
                          VerticalScrollBarVisibility="Auto"
                          IsReadOnly="True"/>
+            <Button x:Name="BtnRestartSetup"    Content="Restart Setup" Height="26" Padding="3,2"/>
         </StackPanel>
 
         <!-- BUTTONS -->
@@ -58,7 +59,6 @@
             <Button x:Name="BtnRollback"        Content="Rollback"       Height="26" Padding="3,2" Margin="0,0,0,6"/>
             <Button x:Name="BtnSwitch"          Content="Switch Version" Height="26" Padding="3,2" Margin="0,0,0,6"/>
             <Button x:Name="BtnValidateSymlink" Content="Validate Symlink" Height="26" Padding="3,2" Margin="0,0,0,6"/>
-            <Button x:Name="BtnRestartSetup"    Content="Restart Setup" Height="26" Padding="3,2"/>
         </StackPanel>
 
         <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,10,0">
@@ -67,20 +67,21 @@
             <CheckBox x:Name="ChkSafeMode" Content="Safe Mode Enabled" Margin="0,6,0,0"/>
         </StackPanel>
 
-        <!-- DATAGRID -->
         <DataGrid x:Name="DgVersions"
-                  Grid.Row="1"
-                  Grid.Column="2"
-                  Height="180"
-                  Margin="10,0,0,0"
-                  AutoGenerateColumns="False"
-                  IsReadOnly="True"
-                  HeadersVisibility="Column"
-                  GridLinesVisibility="All">
+                Grid.Row="1"
+                Grid.Column="2"
+                Height="180"
+                Margin="10,0,0,0"
+                AutoGenerateColumns="False"
+                IsReadOnly="True"
+                HeadersVisibility="Column"
+                GridLinesVisibility="All"
+                SelectionMode="Single"
+                SelectionUnit="FullRow">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Version" Binding="{Binding Name}" Width="180"/>
-                <DataGridTextColumn Header="Path" Binding="{Binding FullName}" Width="*"/>
-                <DataGridTextColumn Header="Last Modified" Binding="{Binding LastWriteTime, StringFormat={}{0:yyyy-MM-dd HH:mm:ss}}" Width="150"/>
+                <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="180"/>
+                <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*"/>
+                <DataGridTextColumn Header="Last Modified" Binding="{Binding LastModified, StringFormat={}{0:yyyy-MM-dd HH:mm:ss}}" Width="150"/>
             </DataGrid.Columns>
         </DataGrid>
 
@@ -117,7 +118,7 @@
                      Height="150"
                      TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto"
-                     Padding="6"
+                     Padding="0,0,0,10"
                      IsReadOnly="True"/>
         </Grid>
     </Grid>

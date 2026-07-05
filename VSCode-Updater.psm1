@@ -6,20 +6,42 @@
     Author: Leon McClatchey
     Company: Linktech Engineering LLC
     Created: 2026-04-16
-    Modified: 2026-06-14
+    Modified: 2026-07-05
     File: VSCode-Updater.psm1
     Version: 2.2.0
-    Description: Module root for VSCode-Updater. Loads public functions, wires private helpers, and exposes the deterministic Update-VSCode entry point and related management commands.
+    Description: Module root for VSCode-Updater. Loads public functions, wires private helpers,
+                 and exposes deterministic update, rollback, symlink diagnostics, and safe-mode operations.
 #>
 
-# Dot-source Public functions
+# =====================================================================
+#  Load Public + Private Functions
+# =====================================================================
+
 Get-ChildItem -Path $PSScriptRoot/Public -Filter *.ps1 | ForEach-Object {
     . $_.FullName
 }
 
-# Load private functions
-Get-ChildItem -Path "$PSScriptRoot/Private" -Filter *.ps1 |
-    ForEach-Object { . $_.FullName }
+Get-ChildItem -Path "$PSScriptRoot/Private" -Filter *.ps1 | ForEach-Object {
+    . $_.FullName
+}
+
+# =====================================================================
+#  Module-Level Constants
+# =====================================================================
+
+Set-Variable -Name VSU_MaxRetries     -Value 5   -Scope Script -Option ReadOnly
+Set-Variable -Name VSU_DetectTimeout  -Value 10  -Scope Script -Option ReadOnly
+Set-Variable -Name VSU_DefaultIdle    -Value 600 -Scope Script -Option ReadOnly
+
+# Load module version from manifest
+$script:ModuleVersion = (Import-PowerShellDataFile "$PSScriptRoot\VSCode-Updater.psd1").ModuleVersion
+
+Write-Log "[INIT] VSCode-Updater module loaded — version $script:ModuleVersion"
+
+
+# =====================================================================
+#  Update-VSCode (Public Entry Point)
+# =====================================================================
 
 function Update-VSCode {
     [CmdletBinding()]
@@ -28,26 +50,24 @@ function Update-VSCode {
         [switch]$SkipDownload,
         [switch]$ForceDownload,
         [int]$RetryCount = 3,
-        [int]$IdleTimeout = 600
+        [int]$IdleTimeout = $script:VSU_DefaultIdle
     )
+
     if ($script:SafeMode) {
         _out "SAFE MODE — Update skipped." "Yellow"
         return
     }
-    $MaxRetries = 5   # hard ceiling for safety
 
-    # =====================================================================
-    #  Initialization + Metadata Banner
-    # =====================================================================
-
+    # Metadata
     $scriptName    = "Update-VSCode"
-    $scriptVersion = "2.2.0"
+    $scriptVersion = $script:ModuleVersion
 
     $codeExe    = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe"
     $codeRoot   = Split-Path $codeExe -Parent
     $cacheDir   = "$PSScriptRoot/../Cache"
     $cachedInstaller = Join-Path $cacheDir "VSCodeSetup.exe"
     $installerUrl    = "https://update.code.visualstudio.com/latest/win32-x64-user/stable"
+
     $script:LastUpdateResult   = $null
     $script:LastFallbackReason = $null
 
@@ -62,12 +82,15 @@ function Update-VSCode {
     Write-Log "  RetryCount=$RetryCount  IdleTimeout=$IdleTimeout"
     Write-Log "==============================================================================="
 
-    # Guard: VS Code must not be running
+    # =====================================================================
+    #  Guard: VS Code must not be running
+    # =====================================================================
+
     $running = Get-Process -Name "Code", "Code - Insiders" -ErrorAction SilentlyContinue
 
     if ($running) {
-        Write-Host "VS Code is currently running."
-        Write-Host "Updating requires closing VS Code."
+        _out "VS Code is currently running."
+        _out "Updating requires closing VS Code."
 
         $choice = Read-Host "Close VS Code and continue? (Y/N)"
 
@@ -108,22 +131,16 @@ function Update-VSCode {
     # =====================================================================
     #  Download + Cache Installer
     # =====================================================================
-    $Mode = if ($SkipDownload) {
-        "Skip"
-    }
-    elseif ($ForceDownload) {
-        "Force"
-    }
-    else {
-        "Normal"
-    }
 
-    Write-Host "Installer URL: '$installerUrl'"
-    Write-Host "Length: $($installerUrl.Length)"
+    $Mode = if ($SkipDownload) { "Skip" }
+            elseif ($ForceDownload) { "Force" }
+            else { "Normal" }
+
+    _out "Installer URL: '$installerUrl'"
+    _out "Length: $($installerUrl.Length)"
 
     Get-Installer -Url $installerUrl -CachePath $cachedInstaller -DownloadMode $Mode
 
-    # --- HARD FAILURE CHECK ---
     if (-not (Test-Path $cachedInstaller)) {
         Write-Log "[ERROR] Cached installer missing after update"
         $script:LastUpdateResult   = "Failed"
@@ -132,7 +149,7 @@ function Update-VSCode {
         return 12
     }
 
-    # --- DIAGNOSTICS ---
+    # Diagnostics
     $size = (Get-Item $cachedInstaller).Length
     if ($size -lt 5MB) {
         Write-Log "[DETECT] Cached installer appears corrupted or incomplete (size: $size bytes)"
@@ -142,17 +159,6 @@ function Update-VSCode {
     $age = (Get-Date) - $installerItem.LastWriteTime
     if ($age.TotalDays -gt 7) {
         Write-Log "[DETECT] Cached installer is stale (age: $([math]::Round($age.TotalDays,2)) days)"
-        Write-Log "[DETECT] This may indicate a past failed or incomplete update attempt."
-    }
-
-    $installDir = "$env:LOCALAPPDATA\Programs\Microsoft VS Code"
-    if (Test-Path $installDir) {
-        $lastWrite = (Get-Item $installDir).LastWriteTime
-        if ($lastWrite -lt (Get-Date).AddMinutes(-10)) {
-            Write-Log "[DETECT] Install directory timestamp unchanged. Installer may have exited without updating."
-        }
-    } else {
-        Write-Log "[DETECT] VS Code install directory not found. Installation may be incomplete or corrupted."
     }
 
     # =====================================================================
@@ -162,9 +168,9 @@ function Update-VSCode {
     Cleanup-InnoSetupWorkers
     Start-Sleep -Milliseconds 200
 
-    if ($RetryCount -gt $MaxRetries) {
-        Write-Log "[WARN] RetryCount ($RetryCount) exceeds maximum allowed ($MaxRetries). Clamping."
-        $RetryCount = $MaxRetries
+    if ($RetryCount -gt $script:VSU_MaxRetries) {
+        Write-Log "[WARN] RetryCount ($RetryCount) exceeds maximum allowed ($script:VSU_MaxRetries). Clamping."
+        $RetryCount = $script:VSU_MaxRetries
     }
 
     $attempt     = 0
@@ -180,20 +186,20 @@ function Update-VSCode {
             Write-Log "[DETECT] Parent PID: $parentPID"
 
             $child = $null
-            $detectTimeout = 10
             $elapsed = 0
 
-            while (-not $child -and $elapsed -lt $detectTimeout) {
+            while (-not $child -and $elapsed -lt $script:VSU_DetectTimeout) {
                 Start-Sleep -Milliseconds 500
                 $elapsed += 1
 
-                $child = Get-CimInstance Win32_Process -Filter "ParentProcessId = $parentPID" -ErrorAction SilentlyContinue |
-                    Sort-Object CreationDate |
+                $child = Get-Process -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Parent -eq $parentPID } |
+                    Sort-Object StartTime |
                     Select-Object -Last 1
             }
 
             if ($child) {
-                $childPID = $child.ProcessId
+                $childPID = $child.Id
                 Write-Log "[DETECT] Child worker PID: $childPID (found after ${elapsed}s)"
             } else {
                 Write-Log "[DETECT] No child worker detected — treating as installer failure"
@@ -202,38 +208,27 @@ function Update-VSCode {
                 continue
             }
 
-            $childProcess = Get-Process -Id $childPID -ErrorAction SilentlyContinue
-            $result = Watchdog-MonitorInstaller -ChildProcess $childProcess -ParentPID $parentPID -IdleTimeout $IdleTimeout
+            $result = Watchdog-MonitorInstaller -ChildProcess $child -ParentPID $parentPID -IdleTimeout $IdleTimeout
 
             switch ($result) {
                 "Success" {
                     Write-Log "[WATCHDOG] Installer exited normally"
-                    Write-Log "----- $scriptName ended (exit 0) (Normal)-----"
-                    $result = "Success"
                     break
                 }
-
                 "FS-Stalled" {
                     Write-Log "[WATCHDOG] Filesystem stall detected"
-                    $result = "FS Stalled"
                     break
                 }
-
                 "Idle-Stalled" {
                     Write-Log "[WATCHDOG] CPU/Disk idle stall"
-                    $result = "Idle Stall"
                     break
                 }
-
                 "Active-Stalled" {
                     Write-Log "[WATCHDOG] CPU/Disk active stall"
-                    $result = "Active Stall"
                     break
                 }
-
                 default {
                     Write-Log "[WATCHDOG] Unexpected watchdog state: $result"
-                    $result = "Unexpected Error"
                     break
                 }
             }
@@ -263,10 +258,7 @@ function Update-VSCode {
             Write-Log "[STALL] Installer stalled on attempt $attempt"
 
             if ($result -like "*Stall*") {
-                Write-Log "[STALL] Detected stall state '$result' — performing cleanup before fallback"
-                Cleanup-VSCodeHelpers
-                Cleanup-InnoSetupWorkers
-                Write-Log "[STALL] Cleanup complete — invoking ZIP fallback"
+                Write-Log "[STALL] Detected stall state '$result' — invoking ZIP fallback"
                 return Invoke-ZipFallback -Reason $result
             }
 
@@ -280,9 +272,6 @@ function Update-VSCode {
             Cleanup-InnoSetupWorkers
             continue
         }
-
-        Get-Process Code, CodeHelper*, CodeSetup*, VSCodeSetup* -ErrorAction SilentlyContinue |
-            Stop-Process -Force -ErrorAction SilentlyContinue
     }
 
     # =====================================================================
@@ -349,7 +338,12 @@ function Update-VSCode {
     return 0
 }
 
-Export-ModuleMember -Function Update-VSCode, `
+# =====================================================================
+#  Export Public Functions
+# =====================================================================
+
+Export-ModuleMember -Function `
+    Update-VSCode, `
     Get-VSCodeVersions, `
     Switch-VSCodeVersion, `
     Invoke-VSCodeRollback, `
@@ -357,4 +351,6 @@ Export-ModuleMember -Function Update-VSCode, `
     Start-VSCodeSafeMode, `
     Get-VSCodeDashboard, `
     Invoke-ZipFallback, `
-    Get-VSCodeSymlinkInfo
+    Get-VSCodeSymlinkInfo,`
+    Get-VSCodeLastResult,`
+    Set-VSCodeSafeMode

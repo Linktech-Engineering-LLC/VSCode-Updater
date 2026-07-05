@@ -16,23 +16,38 @@ function Cleanup-SetupBootstrapper {
 
     $setup = Get-Process -ErrorAction SilentlyContinue |
         Where-Object {
-            $_.ProcessName -match "CodeSetup" -or
-            $_.ProcessName -match "VSCodeSetup" -or
-            $_.ProcessName -match "^is-[A-Za-z0-9]+" -or
-            $_.ProcessName -match "tmp$" -or
-            $_.ProcessName -match "tmp.exe$" -or
-            $_.ProcessName -match "CodeUpdate*" -or
-            $_.ProcessName -match "VSCodeUpdate*"
+            # Direct bootstrapper names
+            ($_.ProcessName -match "CodeSetup") -or
+            ($_.ProcessName -match "VSCodeSetup") -or
+            ($_.ProcessName -match "CodeUpdate") -or
+            ($_.ProcessName -match "VSCodeUpdate") -or
+
+            # Inno Setup workers (name only)
+            ($_.ProcessName -match "^is-[A-Za-z0-9]+(\.tmp|\.tmp\.exe)?$") -or
+
+            # Temp executables
+            ($_.ProcessName -match "tmp$") -or
+            ($_.ProcessName -match "tmp\.exe$") -or
+
+            # Path-based detection (when available)
+            ($_.Path -and ($_.Path -match "is-[A-Za-z0-9]+\.tmp")) -or
+            ($_.Path -and ($_.Path -match "VSCodeSetup")) -or
+            ($_.Path -and ($_.Path -match "CodeSetup")) -or
+
+            # Command-line detection (covers PowerShell spawns)
+            ($_.CommandLine -and ($_.CommandLine -match "is-[A-Za-z0-9]+\.tmp")) -or
+            ($_.CommandLine -and ($_.CommandLine -match "VSCodeSetup")) -or
+            ($_.CommandLine -and ($_.CommandLine -match "CodeSetup"))
         }
 
-    # --- NEW: double‑spawn detection ---
+    # --- Double‑spawn diagnostics ---
     if ($setup.Count -gt 1) {
         Write-Log "[CLEANUP] Detected multiple bootstrapper workers: $($setup.Count)"
         $setup | ForEach-Object {
             Write-Log "[CLEANUP] Worker PID=$($_.Id) StartTime=$($_.StartTime)"
         }
     }
-    # -----------------------------------
+    # --------------------------------
 
     if ($setup) {
         Write-Log "[CLEANUP] Terminating bootstrapper PIDs: $($setup.Id -join ', ')"

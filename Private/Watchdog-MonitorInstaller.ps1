@@ -18,15 +18,20 @@ function Watchdog-MonitorInstaller {
         [int]$IdleTimeout
     )
 
+    if ($script:SafeMode) {
+        Write-Log "[WATCHDOG] SAFE MODE — watchdog disabled"
+        return 0
+    }
+
     $idleSeconds    = 0
+    $activeSeconds  = 0
+    $fsIdleSeconds  = 0
     $lastState      = ""
     $lastCPU        = 0
     $lastDisk       = 0
-    $fsIdleSeconds  = 0
-    $activeSeconds  = 0
     $installPath    = "$env:LOCALAPPDATA\Programs\Microsoft VS Code"
     $lastWriteTime  = (Get-Date)
-    $fsLogCooldown  = 30   # seconds
+    $fsLogCooldown  = 30
     $lastFsLog      = (Get-Date).AddSeconds(-10)
 
     Write-Log "[WATCHDOG] Monitoring child PID $($ChildProcess.Id), parent PID $ParentPID"
@@ -34,57 +39,72 @@ function Watchdog-MonitorInstaller {
     while ($true) {
         Start-Sleep -Seconds 2
 
-        # Always re-query the child process — never trust the stale snapshot
+        # Re-query child
         $child = Get-Process -Id $ChildProcess.Id -ErrorAction SilentlyContinue
+
+        # Detect child replacement
         if (-not $child) {
+            $newChild = Get-Process -ErrorAction SilentlyContinue |
+                Where-Object { $_.Parent.Id -eq $ParentPID }
+
+            if ($newChild) {
+                Write-Log "[WATCHDOG] Child replaced — new PID $($newChild.Id)"
+                $ChildProcess = $newChild
+                continue
+            }
+
             Write-Log "[WATCHDOG] Child exited — success"
-            return "Success"
+            return 0
         }
 
-        # Increment FS idle timer every loop
+        # FS idle timer
         $fsIdleSeconds += 2
 
-		# Detect file system activity in the VS Code directory (exclude logs/temp)
-		try {
-			$latestWrite = Get-ChildItem -Recurse $installPath -File -ErrorAction SilentlyContinue |
-				Where-Object {
-					$_.Extension -notin '.log', '.tmp', '.bak' -and
-					$_.FullName -notmatch '\\logs?\\' -and
-					$_.FullName -notmatch '\\Crashpad\\' -and
-					$_.FullName -notmatch '\\User Data\\' -and
-					$_.FullName -notmatch '\\WebView2\\'
-				} |
-				Sort-Object LastWriteTime |
-				Select-Object -Last 1
+        # Detect real installer writes
+        try {
+            $latestWrite = Get-ChildItem -Recurse $installPath -File -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.Extension -notin '.log', '.tmp', '.bak' -and
+                    $_.FullName -notmatch '\\logs?\\' -and
+                    $_.FullName -notmatch '\\Crashpad\\'
+                } |
+                Sort-Object LastWriteTime |
+                Select-Object -Last 1
 
-			if ($latestWrite -and $latestWrite.LastWriteTime -gt $lastWriteTime) {
-				if ((Get-Date) -gt $lastFsLog.AddSeconds($fsLogCooldown)) {
-					Write-Log "[WATCHDOG] FS activity (real installer file): $($latestWrite.Name)"
-					$lastFsLog = Get-Date
-				}
+            if ($latestWrite -and $latestWrite.LastWriteTime -gt $lastWriteTime) {
+                if ((Get-Date) -gt $lastFsLog.AddSeconds($fsLogCooldown)) {
+                    Write-Log "[WATCHDOG] FS activity: $($latestWrite.Name)"
+                    $lastFsLog = Get-Date
+                }
 
-				$lastWriteTime = $latestWrite.LastWriteTime
-				$fsIdleSeconds = 0
-				$activeSeconds = 0
-				$idleSeconds   = 0
-			}
-		}
-		catch {
-			# Directory may not exist yet — ignore
-		}
+                $lastWriteTime = $latestWrite.LastWriteTime
+                $fsIdleSeconds = 0
+                $activeSeconds = 0
+                $idleSeconds   = 0
+            }
+        }
+        catch {}
 
-        # Filesystem stall detection
+        # FS stall
         if ($fsIdleSeconds -ge $IdleTimeout) {
-            Write-Log "[WATCHDOG] No filesystem activity for $IdleTimeout seconds — killing installer"
+            Write-Log "[WATCHDOG] FS stall — killing installer"
             Stop-Process -Id $ChildProcess.Id -Force -ErrorAction SilentlyContinue
             Stop-Process -Id $ParentPID     -Force -ErrorAction SilentlyContinue
-            return "FS-Stalled"
+            return 93
         }
 
-        $cpu  = $child.CPU
-        $disk = $child.IOReadBytes + $child.IOWriteBytes
+        # CPU/disk delta
+        $cpuNow  = $child.CPU
+        $diskNow = $child.IOReadBytes + $child.IOWriteBytes
 
-        if ($cpu -eq 0 -and $disk -eq 0) {
+        $cpuDelta  = $cpuNow  - $lastCPU
+        $diskDelta = $diskNow - $lastDisk
+
+        $lastCPU  = $cpuNow
+        $lastDisk = $diskNow
+
+        # Idle
+        if ($cpuDelta -eq 0 -and $diskDelta -eq 0) {
             $idleSeconds += 2
 
             if ($lastState -ne "Idle") {
@@ -95,53 +115,37 @@ function Watchdog-MonitorInstaller {
             Write-Log "[WATCHDOG] Idle for $idleSeconds seconds"
 
             if ($idleSeconds -ge $IdleTimeout) {
-                Write-Log "[WATCHDOG] Idle threshold reached — killing parent PID $ParentPID"
+                Write-Log "[WATCHDOG] Idle stall — killing parent"
                 Stop-Process -Id $ParentPID -Force -ErrorAction SilentlyContinue
-
-                Write-Log "[WATCHDOG] Waiting for child PID $($ChildProcess.Id) to exit"
                 Wait-Process -Id $ChildProcess.Id -ErrorAction SilentlyContinue
+                return 91
+            }
 
-                return "Idle-Stalled"
+            continue
+        }
+
+        # Active
+        if ($lastState -ne "Active") {
+            Write-Log "[WATCHDOG] Child transitioned to active"
+            $lastState = "Active"
+        }
+
+        # Active stall
+        if ($cpuDelta -eq 0 -and $diskDelta -eq 0) {
+            $activeSeconds += 2
+
+            if ($activeSeconds -ge $IdleTimeout) {
+                Write-Log "[WATCHDOG] Active stall — killing parent and child"
+                Stop-Process -Id $ChildProcess.Id -Force -ErrorAction SilentlyContinue
+                Stop-Process -Id $ParentPID     -Force -ErrorAction SilentlyContinue
+                return 92
             }
         }
         else {
-            # Detect transition to active
-            if ($lastState -ne "Active") {
-                Write-Log "[WATCHDOG] Child transitioned to active"
-                $lastState = "Active"
-            }
-
-            # Detect stalled active state
-            if ($cpu -eq $lastCPU -and $disk -eq $lastDisk) {
-                $activeSeconds += 2
-
-                if ($activeSeconds -ge $IdleTimeout) {
-                    Write-Log "[WATCHDOG] Child is stalled in active state — killing parent PID $ParentPID and child PID $($ChildProcess.Id)"
-
-                    Stop-Process -Id $ChildProcess.Id -Force -ErrorAction SilentlyContinue
-                    Stop-Process -Id $ParentPID     -Force -ErrorAction SilentlyContinue
-
-                    try {
-                        Wait-Process -Id $ChildProcess.Id -Timeout 10 -ErrorAction SilentlyContinue
-                    }
-                    catch {
-                        Write-Log "[WATCHDOG] Child did not exit within timeout — continuing anyway"
-                    }
-
-                    return "Active-Stalled"
-                }
-            }
-            else {
-                # Progress is being made
-                $activeSeconds = 0
-            }
-
-            # Update last metrics
-            $lastCPU  = $cpu
-            $lastDisk = $disk
-
-            # Reset idle counter
-            $idleSeconds = 0
+            $activeSeconds = 0
         }
+
+        # Reset idle counter
+        $idleSeconds = 0
     }
 }
