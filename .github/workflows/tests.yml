@@ -17,7 +17,7 @@ jobs:
         run: Install-Module Pester -Force -Scope CurrentUser
 
       - name: Import module
-        run: Import-Module ../VSCode-Updater -Force
+        run: Import-Module "$env:GITHUB_WORKSPACE/VSCode-Updater" -Force
 
       - name: Run Tests
         shell: pwsh
