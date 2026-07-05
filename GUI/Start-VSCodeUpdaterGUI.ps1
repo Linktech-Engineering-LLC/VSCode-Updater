@@ -19,24 +19,6 @@ Import-Module "$PSScriptRoot\..\VSCode-Updater.psd1" -Force
 . "$PSScriptRoot\..\Private\Write-Log.ps1"
 
 
-function Get-SelectedVersionName {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [object]$DataGrid
-    )
-
-    if (-not $DataGrid.SelectedItem) {
-        return $null
-    }
-
-    $selectedItem = $DataGrid.SelectedItem
-    if ($selectedItem.PSObject.Properties.Name -contains 'Name') {
-        return [string]$selectedItem.Name
-    }
-
-    return $null
-}
 function Clear-Terminal {
     $window.Dispatcher.Invoke({
         $txtCommandOutput.Document.Blocks.Clear()

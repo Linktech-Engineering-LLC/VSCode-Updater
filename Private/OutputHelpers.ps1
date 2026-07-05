@@ -36,21 +36,14 @@ function Write-TerminalLine {
 
         $paragraph = New-Object System.Windows.Documents.Paragraph
         $paragraph.Margin = [System.Windows.Thickness]::new(0)
-
         $run = New-Object System.Windows.Documents.Run
         $run.Text = $Text
         $run.Foreground = $Color
-
         $paragraph.Inlines.Add($run)
 
-        # ⭐ Add new lines at the top instead of the bottom
         $txtCommandOutput.Document.Blocks.Add($paragraph)
         $txtCommandOutput.CaretPosition = $txtCommandOutput.Document.ContentEnd
         $txtCommandOutput.ScrollToEnd()
-
-        # ⭐ Keep the caret at the start so the newest line is visible
-        $txtCommandOutput.CaretPosition = $txtCommandOutput.Document.ContentStart
-        $txtCommandOutput.ScrollToHome()
         $txtCommandOutput.UpdateLayout()
     })
 }

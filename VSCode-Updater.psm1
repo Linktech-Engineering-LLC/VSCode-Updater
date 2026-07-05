@@ -357,5 +357,4 @@ Export-ModuleMember -Function Update-VSCode, `
     Start-VSCodeSafeMode, `
     Get-VSCodeDashboard, `
     Invoke-ZipFallback, `
-    Get-VSCodeSymlinkInfo,`
-    Get-SelectedVersionName
+    Get-VSCodeSymlinkInfo
