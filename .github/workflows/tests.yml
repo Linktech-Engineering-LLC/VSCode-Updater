@@ -16,6 +16,9 @@ jobs:
         shell: pwsh
         run: Install-Module Pester -Force -Scope CurrentUser
 
+      - name: Import module
+        run: Import-Module ./VSCode-Updater -Force
+
       - name: Run Tests
         shell: pwsh
         run: Invoke-Pester -Path Tests -Output Detailed
