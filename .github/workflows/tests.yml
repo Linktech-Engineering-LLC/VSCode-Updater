@@ -12,6 +12,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Register PSGallery
+        shell: pwsh
+        run: |
+          Register-PSRepository -Default -ErrorAction SilentlyContinue
+          Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted
+
       - name: Install Pester
         shell: pwsh
         run: Install-Module Pester -Force -Scope CurrentUser
