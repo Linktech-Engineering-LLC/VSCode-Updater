@@ -413,12 +413,18 @@ function Start-VSCodeUpdaterGUI {
     })
 
     $dgVersions.Add_SelectionChanged({
-        if (-not $script:vm.GuiInitialized) { return }
-
         $selected = $dgVersions.SelectedItem
-        if ($selected) {
-            Write-TerminalLine "Selected Version: $($selected.Version)" "LightBlue"
+        if (-not $selected) { return }
+
+        if ($selected.IsValid) {
+            $script:btnSwitch.Content = "Switch Version"
         }
+        else {
+            $script:btnSwitch.Content = "Delete Version"
+        }
+
+        Write-TerminalLine "Selected Version: $($selected.Version)" "LightBlue"
+        Write-Log "Selected Version: $($selected.Version)"
     })
 
     $chkAutoScroll.Add_Checked({

@@ -48,7 +48,7 @@ function Get-VSCodeVersions {
             continue
         }
 
-        $isValid = ($codeExe -ne $null) -and ($productJson -ne $null)
+        $isValid = ($null -ne $codeExe) -and ($null -ne $productJson)
 
         if (-not $isValid) {
             Write-Log "[VERSIONS] Invalid VS Code folder: $path"
@@ -59,8 +59,8 @@ function Get-VSCodeVersions {
             Path           = $path
             LastModified   = $dir.LastWriteTime
             IsValid        = $isValid
-            HasCodeExe     = ($codeExe -ne $null)
-            HasProductJson = ($productJson -ne $null)
+            HasCodeExe     = ($null -ne $codeExe)
+            HasProductJson = ($null -ne $productJson)
         }
     }
 

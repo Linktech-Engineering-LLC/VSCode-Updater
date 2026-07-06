@@ -74,5 +74,5 @@ function Update-VSCodeVersions {
     }
 
     Write-Log "[CLEANUP] Removed $removed old version(s)"
-    return 0
+    return $null
 }

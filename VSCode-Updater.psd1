@@ -30,7 +30,9 @@
         'Invoke-ZipFallback',
         'Get-VSCodeSymlinkInfo',
         'Get-VSCodeLastResult',
-        'Set-VSCodeSafeMode'
+        'Set-VSCodeSafeMode',
+        'Start-VSCodeRepair',
+        'Set-VSCodeSafeInstallerMode'
     )
 
     PrivateData = @{

@@ -18,7 +18,7 @@ function CleanCodePath {
 
     if (-not (Test-Path $Path)) {
         Write-Log "[CLEANUP] VS Code path not found — skipping."
-        return 90
+        return $null
     }
 
     # Validate symlink target if applicable
@@ -69,5 +69,5 @@ function CleanCodePath {
     }
 
     Write-Log "[CLEANUP] VS Code cleanup complete."
-    return 0
+    return $null
 }

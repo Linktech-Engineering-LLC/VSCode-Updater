@@ -112,8 +112,6 @@ function Watchdog-MonitorInstaller {
                 $lastState = "Idle"
             }
 
-            Write-Log "[WATCHDOG] Idle for $idleSeconds seconds"
-
             if ($idleSeconds -ge $IdleTimeout) {
                 Write-Log "[WATCHDOG] Idle stall — killing parent"
                 Stop-Process -Id $ParentPID -Force -ErrorAction SilentlyContinue

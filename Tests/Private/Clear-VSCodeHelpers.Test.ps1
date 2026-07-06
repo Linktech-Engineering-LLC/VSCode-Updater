@@ -15,10 +15,10 @@
 # Requires -Version 7.0
 # Pester 5.x test for Cleanup-VSCodeHelpers
 
-Describe "Cleanup-VSCodeHelpers" -Tag 'Private' {
+Describe "Clear-VSCodeHelpers" -Tag 'Private' {
 
     BeforeAll {
-        . "$PSScriptRoot/../../Private/Cleanup-VSCodeHelpers.ps1"
+        . "$PSScriptRoot/../../Private/Clear-VSCodeHelpers.ps1"
         . "$PSScriptRoot/../../Private/Write-Log.ps1"
     }
 

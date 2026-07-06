@@ -14,43 +14,40 @@
 function Write-Log {
     param([string]$Message)
 
-    $logRoot = "C:\Logs"
-    $logFile = Join-Path $logRoot "Update-Code.log"
-    $fallback = Join-Path $logRoot "Update-Code.fallback.log"
+    $mutex = New-Object System.Threading.Mutex($false, "VSCodeUpdaterLogLock")
+    $mutex.WaitOne()
 
-    if (-not (Test-Path $logRoot)) {
-        New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
-    }
-
-    # Safe Mode prefix
-    if ($script:SafeMode) {
-        $Message = "[SAFE] $Message"
-    }
-
-    # Sanitize message
-    $Message = $Message -replace "`r|`n", " "
-    $Message = $Message.Trim()
-
-    $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-    $line = "$timestamp $Message"
-
-    # Retry logic
-    for ($i = 1; $i -le 3; $i++) {
-        try {
-            Add-Content -Path $logFile -Value $line -ErrorAction Stop
-            return
-        }
-        catch {
-            Start-Sleep -Milliseconds 100
-        }
-    }
-
-    # Fallback log
     try {
-        Add-Content -Path $fallback -Value $line -ErrorAction SilentlyContinue
+        $logRoot = "C:\Logs"
+        $logFile = Join-Path $logRoot "Update-Code.log"
+        $fallback = Join-Path $logRoot "Update-Code.fallback.log"
+
+        if (-not (Test-Path $logRoot)) {
+            New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
+        }
+
+        if ($script:SafeMode) {
+            $Message = "[SAFE] $Message"
+        }
+
+        $Message = $Message -replace "`r|`n", " "
+        $Message = $Message.Trim()
+
+        $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        $line = "$timestamp $Message"
+
+        # Duplicate prevention (now safe because mutex prevents race)
+        if (Test-Path $logFile) {
+            $lastLine = (Get-Content $logFile -Tail 1 -ErrorAction SilentlyContinue)
+            $lastMsg = $lastLine -replace '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\s+', ''
+            if ($lastMsg -eq $Message) {
+                return
+            }
+        }
+
+        Add-Content -Path $logFile -Value $line -ErrorAction Stop
     }
-    catch {
-        # Last resort: write to host
-        Write-Host $line
+    finally {
+        $mutex.ReleaseMutex()
     }
 }

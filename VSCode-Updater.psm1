@@ -17,13 +17,13 @@
 #  Load Public + Private Functions
 # =====================================================================
 
-Get-ChildItem -Path $PSScriptRoot/Public -Filter *.ps1 | ForEach-Object {
-    . $_.FullName
-}
+Get-ChildItem -Path "$PSScriptRoot/Public" -Filter *.ps1 -ErrorAction SilentlyContinue |
+    Sort-Object Name |
+    ForEach-Object { . $_.FullName }
 
-Get-ChildItem -Path "$PSScriptRoot/Private" -Filter *.ps1 | ForEach-Object {
-    . $_.FullName
-}
+Get-ChildItem -Path "$PSScriptRoot/Private" -Filter *.ps1 -ErrorAction SilentlyContinue |
+    Sort-Object Name |
+    ForEach-Object { . $_.FullName }
 
 # =====================================================================
 #  Module-Level Constants
@@ -32,6 +32,7 @@ Get-ChildItem -Path "$PSScriptRoot/Private" -Filter *.ps1 | ForEach-Object {
 Set-Variable -Name VSU_MaxRetries     -Value 5   -Scope Script -Option ReadOnly
 Set-Variable -Name VSU_DetectTimeout  -Value 10  -Scope Script -Option ReadOnly
 Set-Variable -Name VSU_DefaultIdle    -Value 600 -Scope Script -Option ReadOnly
+Set-Variable -Name VSU_SafeInstallerMode -Value $true -Scope Script -Option ReadOnly
 
 # Load module version from manifest
 $script:ModuleVersion = (Import-PowerShellDataFile "$PSScriptRoot\VSCode-Updater.psd1").ModuleVersion
@@ -109,11 +110,21 @@ function Update-VSCode {
     #  Pre‑Cleanup
     # =====================================================================
 
-    Cleanup-SetupBootstrapper
-    Cleanup-VSCodeHelpers
-    Cleanup-InnoSetupWorkers
+    Clear-SetupBootstrapper | Out-Null
+    Clear-VSCodeHelpers | Out-Null
+    Clear-InnoSetupWorkers | Out-Null
     Start-Sleep -Seconds 2
-    CleanCodePath
+    # Optional: log environment before remediation
+    Test-InstallerEnvironment | Out-Null
+
+    if ($script:VSU_SafeInstallerMode) {
+        Write-Log "[CONFIG] Safe installer mode enabled — applying freeze remediation"
+        Fix-InstallerFreeze | Out-Null
+    }
+    else {
+        Write-Log "[CONFIG] Safe installer mode disabled — skipping freeze remediation"
+    }
+    CleanCodePath | Out-Null
     Start-Sleep -Seconds 2
 
     # =====================================================================
@@ -165,7 +176,7 @@ function Update-VSCode {
     #  Retry Loop
     # =====================================================================
 
-    Cleanup-InnoSetupWorkers
+    Clear-InnoSetupWorkers | Out-Null
     Start-Sleep -Milliseconds 200
 
     if ($RetryCount -gt $script:VSU_MaxRetries) {
@@ -193,7 +204,7 @@ function Update-VSCode {
                 $elapsed += 1
 
                 $child = Get-Process -ErrorAction SilentlyContinue |
-                    Where-Object { $_.Parent -eq $parentPID } |
+                    Where-Object { $_.ParentProcessId -eq $parentPID }
                     Sort-Object StartTime |
                     Select-Object -Last 1
             }
@@ -203,8 +214,8 @@ function Update-VSCode {
                 Write-Log "[DETECT] Child worker PID: $childPID (found after ${elapsed}s)"
             } else {
                 Write-Log "[DETECT] No child worker detected — treating as installer failure"
-                Cleanup-VSCodeHelpers
-                Cleanup-InnoSetupWorkers
+                Clear-VSCodeHelpers | Out-Null
+                Clear-InnoSetupWorkers | Out-Null
                 continue
             }
 
@@ -245,8 +256,8 @@ function Update-VSCode {
             continue
         }
 
-        Cleanup-VSCodeHelpers
-        Cleanup-InnoSetupWorkers
+        Clear-VSCodeHelpers | Out-Null
+        Clear-InnoSetupWorkers | Out-Null
 
         if ($result -eq "Success") {
             Write-Log "[SUCCESS] Installer completed successfully on attempt $attempt"
@@ -268,8 +279,8 @@ function Update-VSCode {
             }
 
             Write-Log "[RETRY] Cleaning processes and artifacts before retry"
-            Cleanup-VSCodeHelpers
-            Cleanup-InnoSetupWorkers
+            Clear-VSCodeHelpers | Out-Null
+            Clear-InnoSetupWorkers | Out-Null
             continue
         }
     }
@@ -335,22 +346,27 @@ function Update-VSCode {
 
     Write-Log "==============================================================================="
 
-    return 0
+    return $null
 }
 
 # =====================================================================
 #  Export Public Functions
 # =====================================================================
 
-Export-ModuleMember -Function `
-    Update-VSCode, `
-    Get-VSCodeVersions, `
-    Switch-VSCodeVersion, `
-    Invoke-VSCodeRollback, `
-    Test-VSCodeSymlink, `
-    Start-VSCodeSafeMode, `
-    Get-VSCodeDashboard, `
-    Invoke-ZipFallback, `
-    Get-VSCodeSymlinkInfo,`
-    Get-VSCodeLastResult,`
-    Set-VSCodeSafeMode
+Export-ModuleMember -Function @(
+    'Update-VSCode'
+    'Get-VSCodeVersions'
+    'Switch-VSCodeVersion'
+    'Invoke-VSCodeRollback'
+    'Test-VSCodeSymlink'
+    'Start-VSCodeSafeMode'
+    'Get-VSCodeDashboard'
+    'Invoke-ZipFallback'
+    'Get-VSCodeSymlinkInfo'
+    'Get-VSCodeLastResult'
+    'Set-VSCodeSafeMode'
+    'Start-VSCodeRepair'
+    'Set-VSCodeSafeInstallerMode'
+)
+$PSDefaultParameterValues['*:OutVariable'] = $null
+$PSDefaultParameterValues['*:OutBuffer']   = $null
