@@ -14,12 +14,12 @@
 function Clear-InnoSetupWorkers {
     Write-Log "[CLEANUP] Checking for InnoSetup workers"
 
-    #
-    # PHASE 1 — FAST SCAN (names only)
-    # Avoids touching protected processes and eliminates stalls.
-    #
+    $parentPID = $script:CurrentInstallerPID
+
+    # PHASE 1 — FAST SCAN
     $workers = Get-Process -ErrorAction SilentlyContinue |
         Where-Object {
+            $_.Id -ne $parentPID -and
             $_.Name -match '^is-[A-Za-z0-9]+(\.tmp|\.tmp\.exe)?$'
         }
 
@@ -29,18 +29,17 @@ function Clear-InnoSetupWorkers {
         return
     }
 
-    #
-    # PHASE 2 — DEEP SCAN (only for candidate processes)
-    # Only touch Path/CommandLine on processes that look like InnoSetup workers.
-    #
+    # PHASE 2 — DEEP SCAN
     Write-Log "[CLEANUP] No InnoSetup workers found in fast scan — running deep scan"
 
     $candidates = Get-Process -ErrorAction SilentlyContinue |
         Where-Object {
-            $_.Name -match '^is-[A-Za-z0-9]+' -or
-            $_.Name -match 'Setup'           -or
-            $_.Name -match 'CodeSetup'       -or
-            $_.Name -match 'VSCodeSetup'
+            $_.Id -ne $parentPID -and (
+                $_.Name -match '^is-[A-Za-z0-9]+' -or
+                $_.Name -match 'Setup'           -or
+                $_.Name -match 'CodeSetup'       -or
+                $_.Name -match 'VSCodeSetup'
+            )
         }
 
     $workers = $candidates |
@@ -58,5 +57,4 @@ function Clear-InnoSetupWorkers {
     else {
         Write-Log "[CLEANUP] No InnoSetup worker processes found"
     }
-	Out-Null
 }

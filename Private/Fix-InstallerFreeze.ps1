@@ -29,24 +29,26 @@ function Fix-InstallerFreeze {
         }
     }
 
-    # 2. VS Code install root
+    # 2. VS Code install root — CLEAN CONTENTS ONLY, DO NOT DELETE ROOT
     $installRoot = "$env:LOCALAPPDATA\Programs\Microsoft VS Code"
     if (Test-Path $installRoot) {
         try {
-            Write-Log "[FIX] Removing existing VS Code install root: $installRoot"
-            Remove-Item $installRoot -Force -Recurse -ErrorAction Stop
+            Write-Log "[FIX] Cleaning VS Code install root contents (preserving directory)"
+            Get-ChildItem $installRoot -Force -ErrorAction SilentlyContinue |
+                Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
         }
         catch {
-            Write-Log "[WARN] Failed to remove install root: $($_.Exception.Message)"
+            Write-Log "[WARN] Failed to clean install root: $($_.Exception.Message)"
         }
     }
 
-    # 3. WebView2 runtime
+    # 3. WebView2 runtime — CLEAN WEBVIEW2, NOT VS CODE
     $wv2 = "$env:LOCALAPPDATA\Microsoft\EdgeWebView"
     if (Test-Path $wv2) {
         try {
             Write-Log "[FIX] Resetting WebView2 runtime: $wv2"
-            Remove-Item $wv2 -Force -Recurse -ErrorAction Stop
+            Get-ChildItem $wv2 -Force -ErrorAction SilentlyContinue |
+                Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
         }
         catch {
             Write-Log "[WARN] Failed to reset WebView2 runtime: $($_.Exception.Message)"

@@ -111,8 +111,8 @@ function Update-VSCode {
     # =====================================================================
 
     Clear-SetupBootstrapper | Out-Null
-    Clear-VSCodeHelpers | Out-Null
-    Clear-InnoSetupWorkers | Out-Null
+    #Clear-VSCodeHelpers | Out-Null
+    #Clear-InnoSetupWorkers | Out-Null
     Start-Sleep -Seconds 2
     # Optional: log environment before remediation
     Test-InstallerEnvironment | Out-Null
@@ -172,118 +172,140 @@ function Update-VSCode {
         Write-Log "[DETECT] Cached installer is stale (age: $([math]::Round($age.TotalDays,2)) days)"
     }
 
-    # =====================================================================
-    #  Retry Loop
-    # =====================================================================
+	# =====================================================================
+	#  Retry Loop
+	# =====================================================================
 
-    Clear-InnoSetupWorkers | Out-Null
-    Start-Sleep -Milliseconds 200
+	# DO NOT run aggressive cleanup before PID exists
+	# (leave Clear-InnoSetupWorkers commented out here)
 
-    if ($RetryCount -gt $script:VSU_MaxRetries) {
-        Write-Log "[WARN] RetryCount ($RetryCount) exceeds maximum allowed ($script:VSU_MaxRetries). Clamping."
-        $RetryCount = $script:VSU_MaxRetries
-    }
+	if ($RetryCount -gt $script:VSU_MaxRetries) {
+		Write-Log "[WARN] RetryCount ($RetryCount) exceeds maximum allowed ($script:VSU_MaxRetries). Clamping."
+		$RetryCount = $script:VSU_MaxRetries
+	}
 
-    $attempt     = 0
-    $maxAttempts = $RetryCount + 1
+	$attempt     = 0
+	$maxAttempts = $RetryCount + 1
 
-    while ($attempt -lt $maxAttempts) {
-        $attempt++
-        Write-Log "[ATTEMPT] Installer attempt $attempt of $maxAttempts"
+	while ($attempt -lt $maxAttempts) {
+		$attempt++
+		Write-Log "[ATTEMPT] Installer attempt $attempt of $maxAttempts"
 
-        try {
-            $p = Start-InstallerDetached -Path $cachedInstaller
-            $parentPID = $p.Id
-            Write-Log "[DETECT] Parent PID: $parentPID"
+		try {
+			# Launch installer FIRST
+			$p = Start-InstallerDetached -Path $cachedInstaller
+			$parentPID = $p.Id
 
-            $child = $null
-            $elapsed = 0
+			# Set installer PID BEFORE any cleanup
+			$script:CurrentInstallerPID = $parentPID
+			Write-Log "[DETECT] Parent PID: $parentPID"
 
-            while (-not $child -and $elapsed -lt $script:VSU_DetectTimeout) {
-                Start-Sleep -Milliseconds 500
-                $elapsed += 1
+			# NOW it is safe to run aggressive cleanup
+			#Clear-VSCodeHelpers | Out-Null
+			#Clear-InnoSetupWorkers | Out-Null
 
+			# Child detection
+			$child = $null
+			$elapsed = 0
+
+			while (-not $child -and $elapsed -lt $script:VSU_DetectTimeout) {
+				Start-Sleep -Milliseconds 500
+				$elapsed += 1
+
+                # Robust InnoSetup worker detection
                 $child = Get-Process -ErrorAction SilentlyContinue |
-                    Where-Object { $_.ParentProcessId -eq $parentPID }
+                    Where-Object {
+                        $_.Id -ne $parentPID -and (
+                            $_.Name -match '^is-[A-Za-z0-9]+' -or
+                            $_.Name -match 'tmp$' -or
+                            $_.Name -match 'tmp\.exe$' -or
+                            ($_.Path -and $_.Path -match 'is-[A-Za-z0-9]+\.tmp') -or
+                            ($_.CommandLine -and $_.CommandLine -match 'is-[A-Za-z0-9]+\.tmp')
+                        )
+                    } |
                     Sort-Object StartTime |
                     Select-Object -Last 1
-            }
+			}
 
-            if ($child) {
-                $childPID = $child.Id
-                Write-Log "[DETECT] Child worker PID: $childPID (found after ${elapsed}s)"
-            } else {
-                Write-Log "[DETECT] No child worker detected — treating as installer failure"
-                Clear-VSCodeHelpers | Out-Null
-                Clear-InnoSetupWorkers | Out-Null
-                continue
-            }
+			if ($child) {
+				$childPID = $child.Id
+				Write-Log "[DETECT] Child worker PID: $childPID (found after ${elapsed}s)"
+			} else {
+				Write-Log "[DETECT] No child worker detected — treating as installer failure"
 
-            $result = Watchdog-MonitorInstaller -ChildProcess $child -ParentPID $parentPID -IdleTimeout $IdleTimeout
+				# PID-aware cleanup (safe)
+				Clear-VSCodeHelpers | Out-Null
+				Clear-InnoSetupWorkers | Out-Null
+				continue
+			}
 
-            switch ($result) {
-                "Success" {
-                    Write-Log "[WATCHDOG] Installer exited normally"
-                    break
-                }
-                "FS-Stalled" {
-                    Write-Log "[WATCHDOG] Filesystem stall detected"
-                    break
-                }
-                "Idle-Stalled" {
-                    Write-Log "[WATCHDOG] CPU/Disk idle stall"
-                    break
-                }
-                "Active-Stalled" {
-                    Write-Log "[WATCHDOG] CPU/Disk active stall"
-                    break
-                }
-                default {
-                    Write-Log "[WATCHDOG] Unexpected watchdog state: $result"
-                    break
-                }
-            }
-        }
-        catch {
-            Write-Log "[ERROR] Installer start failure: $($_.Exception.Message)"
-            if ($attempt -ge $maxAttempts) {
-                Write-Log "----- $scriptName ended (exit 13) (Start Failure) -----"
-                $script:LastUpdateResult   = "Failed"
-                $script:LastFallbackReason = "Installer start failure"
-                return 13
-            }
-            Write-Log "[RETRY] Retrying due to start failure"
-            continue
-        }
+			# Watchdog
+			$result = Watchdog-MonitorInstaller -ChildProcess $child -ParentPID $parentPID -IdleTimeout $IdleTimeout
 
-        Clear-VSCodeHelpers | Out-Null
-        Clear-InnoSetupWorkers | Out-Null
+			switch ($result) {
+				"Success" {
+					Write-Log "[WATCHDOG] Installer exited normally"
+					break
+				}
+				"FS-Stalled" {
+					Write-Log "[WATCHDOG] Filesystem stall detected"
+					break
+				}
+				"Idle-Stalled" {
+					Write-Log "[WATCHDOG] CPU/Disk idle stall"
+					break
+				}
+				"Active-Stalled" {
+					Write-Log "[WATCHDOG] CPU/Disk active stall"
+					break
+				}
+				default {
+					Write-Log "[WATCHDOG] Unexpected watchdog state: $result"
+					break
+				}
+			}
+		}
+		catch {
+			Write-Log "[ERROR] Installer start failure: $($_.Exception.Message)"
+			if ($attempt -ge $maxAttempts) {
+				Write-Log "----- $scriptName ended (exit 13) (Start Failure) -----"
+				$script:LastUpdateResult   = "Failed"
+				$script:LastFallbackReason = "Installer start failure"
+				return 13
+			}
+			Write-Log "[RETRY] Retrying due to start failure"
+			continue
+		}
 
-        if ($result -eq "Success") {
-            Write-Log "[SUCCESS] Installer completed successfully on attempt $attempt"
-            $script:LastUpdateResult   = "Success"
-            $script:LastFallbackReason = $null
-            break
-        }
-        else {
-            Write-Log "[STALL] Installer stalled on attempt $attempt"
+		# PID-aware cleanup
+		Clear-VSCodeHelpers | Out-Null
+		Clear-InnoSetupWorkers | Out-Null
 
-            if ($result -like "*Stall*") {
-                Write-Log "[STALL] Detected stall state '$result' — invoking ZIP fallback"
-                return Invoke-ZipFallback -Reason $result
-            }
+		if ($result -eq "Success") {
+			Write-Log "[SUCCESS] Installer completed successfully on attempt $attempt"
+			$script:LastUpdateResult   = "Success"
+			$script:LastFallbackReason = $null
+			break
+		}
+		else {
+			Write-Log "[STALL] Installer stalled on attempt $attempt"
 
-            if ($attempt -ge $maxAttempts) {
-                Write-Log "[FAIL] Installer stalled after $attempt attempts — invoking ZIP fallback"
-                return Invoke-ZipFallback -Reason "Installer stalled after $attempt attempts"
-            }
+			if ($result -like "*Stall*") {
+				Write-Log "[STALL] Detected stall state '$result' — invoking ZIP fallback"
+				return Invoke-ZipFallback -Reason $result
+			}
 
-            Write-Log "[RETRY] Cleaning processes and artifacts before retry"
-            Clear-VSCodeHelpers | Out-Null
-            Clear-InnoSetupWorkers | Out-Null
-            continue
-        }
-    }
+			if ($attempt -ge $maxAttempts) {
+				Write-Log "[FAIL] Installer stalled after $attempt attempts — invoking ZIP fallback"
+				return Invoke-ZipFallback -Reason "Installer stalled after $attempt attempts"
+			}
+
+			Write-Log "[RETRY] Cleaning processes and artifacts before retry"
+			Clear-VSCodeHelpers | Out-Null
+			Clear-InnoSetupWorkers | Out-Null
+			continue
+		}
+	}
 
     # =====================================================================
     #  Post‑Install Health Check
@@ -369,4 +391,3 @@ Export-ModuleMember -Function @(
     'Set-VSCodeSafeInstallerMode'
 )
 $PSDefaultParameterValues['*:OutVariable'] = $null
-$PSDefaultParameterValues['*:OutBuffer']   = $null

@@ -17,6 +17,10 @@ function Watchdog-MonitorInstaller {
         [int]$ParentPID,
         [int]$IdleTimeout
     )
+	if ($ParentPID -eq 0 -or -not (Get-Process -Id $ParentPID -ErrorAction SilentlyContinue)) {
+		Write-Log "[WATCHDOG] Invalid parent PID ($ParentPID) — aborting watchdog"
+		return 0
+	}
 
     if ($script:SafeMode) {
         Write-Log "[WATCHDOG] SAFE MODE — watchdog disabled"

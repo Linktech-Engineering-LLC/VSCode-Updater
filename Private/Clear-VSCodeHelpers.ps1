@@ -14,19 +14,23 @@
 function Clear-VSCodeHelpers {
     Write-Log "[CLEANUP] Checking for VS Code and installer helper processes"
 
+    # Installer PID passed from Update-VSCode
+    $installerPID = $script:CurrentInstallerPID
+
     #
     # PHASE 1 — FAST SCAN (names only)
-    # Avoids touching protected processes and eliminates stalls.
     #
     $helpers = Get-Process -ErrorAction SilentlyContinue |
         Where-Object {
-            $_.Name -eq "Code"              -or
-            $_.Name -like "CodeHelper*"     -or
-            $_.Name -match "CodeSetup"      -or
-            $_.Name -match "VSCodeSetup"    -or
-            $_.Name -match "^is-[A-Za-z0-9]+(\.tmp|\.tmp\.exe)?$" -or
-            $_.Name -match "tmp$"           -or
-            $_.Name -match "tmp\.exe$"
+            $_.Id -ne $installerPID -and (
+                $_.Name -eq "Code"              -or
+                $_.Name -like "CodeHelper*"     -or
+                $_.Name -match "CodeSetup"      -or
+                $_.Name -match "VSCodeSetup"    -or
+                $_.Name -match "^is-[A-Za-z0-9]+(\.tmp|\.tmp\.exe)?$" -or
+                $_.Name -match "tmp$"           -or
+                $_.Name -match "tmp\.exe$"
+            )
         }
 
     if ($helpers) {
@@ -36,17 +40,18 @@ function Clear-VSCodeHelpers {
     }
 
     #
-    # PHASE 2 — DEEP SCAN (only for candidate processes)
-    # Only touch Path/CommandLine on processes that look like installers/helpers.
+    # PHASE 2 — DEEP SCAN
     #
     Write-Log "[CLEANUP] No helper processes found in fast scan — running deep scan"
 
     $candidates = Get-Process -ErrorAction SilentlyContinue |
         Where-Object {
-            $_.Name -match "Code"           -or
-            $_.Name -match "CodeHelper"     -or
-            $_.Name -match "Setup"          -or
-            $_.Name -match "^is-[A-Za-z0-9]+"
+            $_.Id -ne $installerPID -and (
+                $_.Name -match "Code"       -or
+                $_.Name -match "CodeHelper" -or
+                $_.Name -match "Setup"      -or
+                $_.Name -match "^is-[A-Za-z0-9]+"
+            )
         }
 
     $helpers = $candidates |
@@ -66,5 +71,6 @@ function Clear-VSCodeHelpers {
     else {
         Write-Log "[CLEANUP] No VS Code helper processes found"
     }
-	Out-Null
+
+    Out-Null
 }

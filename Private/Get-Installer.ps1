@@ -77,7 +77,7 @@ function Get-Installer {
             if (Test-InstallerValid $CachePath) {
                 Write-Log "[DOWNLOAD] Cached installer exists — checking for update"
 
-                $temp = Join-Path $env:TEMP "installer.tmp"
+                $temp = Join-Path $env:TEMP "installer.exe"
 
                 # Clean stale temp file
                 if (Test-Path $temp) {

@@ -52,6 +52,6 @@ function Start-InstallerDetached {
         return 83
     }
 
-    Write-Log "[INSTALL] Installer launched (PID=$($proc.Id))"
-    return 0
+	Write-Log "[INSTALL] Installer launched (PID=$($proc.Id))"
+	return $proc
 }
