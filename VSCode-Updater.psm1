@@ -65,6 +65,7 @@ function Update-VSCode {
 
     $codeExe    = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe"
     $codeRoot   = Split-Path $codeExe -Parent
+	$InstallRoot = "$env:LOCALAPPDATA\Programs"
     $cacheDir   = "$PSScriptRoot/../Cache"
     $cachedInstaller = Join-Path $cacheDir "VSCodeSetup.exe"
     $installerUrl    = "https://update.code.visualstudio.com/latest/win32-x64-user/stable"
@@ -110,22 +111,7 @@ function Update-VSCode {
     #  Pre‑Cleanup
     # =====================================================================
 
-    Clear-SetupBootstrapper | Out-Null
-    #Clear-VSCodeHelpers | Out-Null
-    #Clear-InnoSetupWorkers | Out-Null
-    Start-Sleep -Seconds 2
-    # Optional: log environment before remediation
-    Test-InstallerEnvironment | Out-Null
-
-    if ($script:VSU_SafeInstallerMode) {
-        Write-Log "[CONFIG] Safe installer mode enabled — applying freeze remediation"
-        Fix-InstallerFreeze | Out-Null
-    }
-    else {
-        Write-Log "[CONFIG] Safe installer mode disabled — skipping freeze remediation"
-    }
-    CleanCodePath | Out-Null
-    Start-Sleep -Seconds 2
+    Invoke-VSUPreCleanup -InstallRoot $InstallRoot
 
     # =====================================================================
     #  Skip Mode
@@ -313,20 +299,37 @@ function Update-VSCode {
 
     Write-Log "[CHECK] Running post-install health validation"
 
+    # ---------------------------------------------------------
+    # 1. Code.exe must exist
+    # ---------------------------------------------------------
+
     if (-not (Test-Path $codeExe)) {
         Write-Log "[CHECK] Code.exe missing — triggering ZIP fallback"
         return Invoke-ZipFallback -Reason "Missing Code.exe"
     }
 
+    # ---------------------------------------------------------
+    # 2. Code.exe must launch and stay running briefly
+    # ---------------------------------------------------------
+
     try {
         $proc = Start-Process $codeExe -PassThru -ErrorAction Stop
-        Start-Sleep -Seconds 2
 
-        if ($proc.HasExited) {
-            Write-Log "[CHECK] VS Code exited immediately — triggering ZIP fallback"
-            return Invoke-ZipFallback -Reason "Launch failure"
+        $elapsed  = 0
+        $maxWait  = 5
+        $interval = 250  # ms
+
+        while ($elapsed -lt $maxWait) {
+            Start-Sleep -Milliseconds $interval
+            $elapsed += ($interval / 1000)
+
+            if ($proc.HasExited) {
+                Write-Log "[CHECK] VS Code exited immediately — triggering ZIP fallback"
+                return Invoke-ZipFallback -Reason "Launch failure"
+            }
         }
 
+        # Kill the test process
         $proc | Stop-Process -Force
     }
     catch {
@@ -334,28 +337,86 @@ function Update-VSCode {
         return Invoke-ZipFallback -Reason "Launch exception"
     }
 
-    $debris = @(
-        "$codeRoot\update.exe",
-        "$codeRoot\*.tmp",
-        "$codeRoot\*.partial"
+    # ---------------------------------------------------------
+    # 3. Debris check (shared patterns)
+    # ---------------------------------------------------------
+
+    $debrisPatterns = @(
+        "update.exe",
+        "*.tmp",
+        "*.partial",
+        "is-*.tmp",
+        "is-*.bin",
+        "innosetup.tmp",
+        "new_*",
+        "tmp_*",
+        "partial_*"
     )
 
-    foreach ($pattern in $debris) {
-        if (Get-ChildItem $pattern -ErrorAction SilentlyContinue) {
-            Write-Log "[CHECK] Detected leftover update debris — triggering ZIP fallback"
+    foreach ($pattern in $debrisPatterns) {
+        $items = Get-ChildItem -Path $codeRoot -Filter $pattern -ErrorAction SilentlyContinue
+        if ($items) {
+            Write-Log "[CHECK] Detected leftover update debris ($pattern) — triggering ZIP fallback"
             return Invoke-ZipFallback -Reason "Debris detected"
         }
     }
 
+    # ---------------------------------------------------------
+    # 4. Mark installer success for rotation/symlink stage
+    # ---------------------------------------------------------
+
     Write-Log "[CHECK] Health check passed — installer appears successful"
+    $script:InstallerSucceeded = $true
 
-    # =====================================================================
-    #  Finalization
-    # =====================================================================
+# =====================================================================
+#  Finalization
+# =====================================================================
 
-    Write-Log "[FINAL] Waiting for cleanup to settle"
-    Start-Sleep -Seconds 5
-    
+Write-Log "[FINAL] Waiting for cleanup to settle"
+Start-Sleep -Seconds 5
+
+# ---------------------------------------------------------
+# 1. If full installer succeeded → rename + symlink
+# ---------------------------------------------------------
+
+if ($script:InstallerSucceeded) {
+
+    Write-Log "[FINAL] Full installer succeeded — performing rotation"
+
+    # Generate timestamped folder name
+    $timestamp = (Get-Date).ToString("yyyyMMddHHmmss")
+    $newFolder = Join-Path $InstallRoot "VSCode-$timestamp"
+
+    # Full installer writes to fixed folder name
+    $fullInstallFolder = Join-Path $InstallRoot "Microsoft VS Code"
+
+    if (Test-Path $fullInstallFolder) {
+        Write-Log "[FINAL] Renaming '$fullInstallFolder' → '$newFolder'"
+        Rename-Item -Path $fullInstallFolder -NewName "VSCode-$timestamp"
+    }
+    else {
+        Write-Log "[FINAL] Expected full-install folder missing — invoking ZIP fallback"
+        return Invoke-ZipFallback -Reason "Missing full-install folder during finalization"
+    }
+
+    # Create symlink
+    $symlinkPath = Join-Path $InstallRoot "VSCode"
+
+    if (Test-Path $symlinkPath) {
+        Write-Log "[FINAL] Removing old symlink"
+        Remove-Item $symlinkPath -Force -ErrorAction SilentlyContinue
+    }
+
+    Write-Log "[FINAL] Creating symlink VSCode → VSCode-$timestamp"
+    New-Item -ItemType Junction -Path $symlinkPath -Target $newFolder | Out-Null
+
+    Update-VSCodeVersions -Keep 3
+}
+
+    # ---------------------------------------------------------
+    # 2. Final result logging
+    # ---------------------------------------------------------
+
     if ($attempt -lt $maxAttempts){
         Write-Log "[FINAL] Update-VSCode completed successfully after $attempt attempts"
         $script:LastUpdateResult   = "Success"

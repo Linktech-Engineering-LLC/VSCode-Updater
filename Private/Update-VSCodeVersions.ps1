@@ -26,7 +26,7 @@ function Update-VSCodeVersions {
     $active = $null
     if (Test-Path $linkPath) {
         try {
-            $active = (Get-Item $linkPath).Target
+            $active = (Get-Item $linkPath).Target | Resolve-Path
         }
         catch {
             Write-Log "[CLEANUP] Warning: Failed to resolve active symlink"

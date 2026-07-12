@@ -64,7 +64,7 @@ function Invoke-ZipFallback {
     }
 
     # Extract
-    $version   = (Get-Date).ToString("yyyyMMdd-HHmmss")
+    $version   = (Get-Date).ToString("yyyyMMddHHmmss")
     $targetDir = Join-Path $env:LOCALAPPDATA "Programs\VSCode-$version"
 
     Write-Log "[FALLBACK] Extracting ZIP to $targetDir"

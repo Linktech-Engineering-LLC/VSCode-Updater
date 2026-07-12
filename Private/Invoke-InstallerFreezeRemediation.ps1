@@ -7,11 +7,11 @@
     Company: Linktech Engineering LLC
     Created: 2026-07-06
     Modified: 2026-07-06
-    File: Fix-InstallerFreeze.ps1
+    File: Invoke-InstallerFreezeRemediation.ps1
     Version: 1.0.0
     Description: Description goes here
 #>
-function Fix-InstallerFreeze {
+function Invoke-InstallerFreezeRemediation {
     [CmdletBinding()]
     param()
 
@@ -29,16 +29,31 @@ function Fix-InstallerFreeze {
         }
     }
 
-    # 2. VS Code install root — CLEAN CONTENTS ONLY, DO NOT DELETE ROOT
+    # 2. VS Code install root — REMOVE ONLY KNOWN DEBRIS
     $installRoot = "$env:LOCALAPPDATA\Programs\Microsoft VS Code"
     if (Test-Path $installRoot) {
         try {
-            Write-Log "[FIX] Cleaning VS Code install root contents (preserving directory)"
-            Get-ChildItem $installRoot -Force -ErrorAction SilentlyContinue |
-                Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Log "[FIX] Cleaning VS Code install root debris (preserving valid files)"
+
+            $debris = @(
+                "update.exe",
+                "*.tmp",
+                "*.partial",
+                "is-*.tmp",
+                "is-*.bin",
+                "innosetup.tmp",
+                "new_*",
+                "tmp_*",
+                "partial_*"
+            )
+
+            foreach ($pattern in $debris) {
+                Get-ChildItem -Path $installRoot -Filter $pattern -ErrorAction SilentlyContinue |
+                    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            }
         }
         catch {
-            Write-Log "[WARN] Failed to clean install root: $($_.Exception.Message)"
+            Write-Log "[WARN] Failed to clean install root debris: $($_.Exception.Message)"
         }
     }
 
