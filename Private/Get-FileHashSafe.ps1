@@ -12,19 +12,21 @@
     Description: Computes a SHA256 hash for a file with safe error handling, returning $null on failure.
 #>
 function Get-FileHashSafe {
+    [OutputType([string])]
     param([string]$Path)
 
     if (-not (Test-Path $Path)) {
-        Write-Log "[HASH] File not found: $Path"
+        Write-VSCodeUpdaterLog "[HASH] File not found: $Path"
         return $null
     }
 
     # --- Hydration attempt (OneDrive / cloud providers) ---
     try {
-        $null = Get-Content -Path $Path -ErrorAction Stop
+        $stream = [System.IO.File]::Open($Path, 'Open', 'Read', 'None')
+        $stream.Close()
     }
     catch {
-        Write-Log "[HASH] Hydration attempt failed for $Path : $($_.Exception.Message)"
+        $null = Write-VSCodeUpdaterLog "[HASH] Hydration attempt failed for $Path : $($_.Exception.Message)"
     }
 
     # --- First attempt ---
@@ -32,7 +34,7 @@ function Get-FileHashSafe {
         return (Get-FileHash -Algorithm SHA256 -Path $Path).Hash
     }
     catch {
-        Write-Log "[HASH] First hash attempt failed for $Path : $($_.Exception.Message)"
+        Write-VSCodeUpdaterLog "[HASH] First hash attempt failed for $Path : $($_.Exception.Message)"
     }
 
     # --- Retry after short delay ---
@@ -41,7 +43,7 @@ function Get-FileHashSafe {
         return (Get-FileHash -Algorithm SHA256 -Path $Path).Hash
     }
     catch {
-        Write-Log "[HASH] Second hash attempt failed for $Path : $($_.Exception.Message)"
+        Write-VSCodeUpdaterLog "[HASH] Second hash attempt failed for $Path : $($_.Exception.Message)"
     }
 
     # --- Manual fallback hashing ---
@@ -54,7 +56,7 @@ function Get-FileHashSafe {
         return ([BitConverter]::ToString($hashBytes) -replace "-", "").ToLower()
     }
     catch {
-        Write-Log "[HASH] Manual SHA256 fallback failed for $Path : $($_.Exception.Message)"
+        Write-VSCodeUpdaterLog "[HASH] Manual SHA256 fallback failed for $Path : $($_.Exception.Message)"
         return $null
     }
 }

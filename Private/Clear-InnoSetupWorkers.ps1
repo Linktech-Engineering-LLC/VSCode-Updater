@@ -12,7 +12,7 @@
     Description: Detects and terminates active Inno Setup worker and bootstrapper processes to prevent installer hangs.
 #>
 function Clear-InnoSetupWorkers {
-    Write-Log "[CLEANUP] Checking for InnoSetup workers"
+    Write-VSCodeUpdaterLog "[CLEANUP] Checking for InnoSetup workers"
 
     $parentPID = $script:CurrentInstallerPID
 
@@ -24,13 +24,13 @@ function Clear-InnoSetupWorkers {
         }
 
     if ($workers) {
-        Write-Log "[CLEANUP] Terminating InnoSetup worker PIDs (fast scan): $($workers.Id -join ', ')"
+        Write-VSCodeUpdaterLog "[CLEANUP] Terminating InnoSetup worker PIDs (fast scan): $($workers.Id -join ', ')"
         $workers | Stop-Process -Force -ErrorAction SilentlyContinue
         return
     }
 
     # PHASE 2 — DEEP SCAN
-    Write-Log "[CLEANUP] No InnoSetup workers found in fast scan — running deep scan"
+    Write-VSCodeUpdaterLog "[CLEANUP] No InnoSetup workers found in fast scan — running deep scan"
 
     $candidates = Get-Process -ErrorAction SilentlyContinue |
         Where-Object {
@@ -51,10 +51,10 @@ function Clear-InnoSetupWorkers {
         }
 
     if ($workers) {
-        Write-Log "[CLEANUP] Terminating InnoSetup worker PIDs (deep scan): $($workers.Id -join ', ')"
+        Write-VSCodeUpdaterLog "[CLEANUP] Terminating InnoSetup worker PIDs (deep scan): $($workers.Id -join ', ')"
         $workers | Stop-Process -Force -ErrorAction SilentlyContinue
     }
     else {
-        Write-Log "[CLEANUP] No InnoSetup worker processes found"
+        Write-VSCodeUpdaterLog "[CLEANUP] No InnoSetup worker processes found"
     }
 }

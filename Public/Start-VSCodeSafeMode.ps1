@@ -16,7 +16,7 @@ function Start-VSCodeSafeMode {
     [CmdletBinding()]
     param()
 
-    Write-Log "[SAFE MODE] Diagnostic mode started"
+    Write-VSCodeUpdaterLog "[SAFE MODE] Diagnostic mode started"
     _out "=== UPDATER SAFE MODE STARTED ===" "Yellow"
 
     # Hardened diagnostics
@@ -55,5 +55,5 @@ function Start-VSCodeSafeMode {
     }
 
     _out "=== UPDATER SAFE MODE COMPLETE ===" "Yellow"
-    Write-Log "[SAFE MODE] Diagnostic mode complete"
+    Write-VSCodeUpdaterLog "[SAFE MODE] Diagnostic mode complete"
 }

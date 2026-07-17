@@ -26,7 +26,7 @@ function Get-VSCodeSymlinkInfo {
     }
 
     if (-not (Test-Path $symlinkPath)) {
-        Write-Log "[SYMLINK] Symlink missing: $symlinkPath"
+        Write-VSCodeUpdaterLog "[SYMLINK] Symlink missing: $symlinkPath"
         return $info
     }
 
@@ -48,15 +48,15 @@ function Get-VSCodeSymlinkInfo {
                 $info.ActiveVersion = Split-Path $target -Leaf
             }
             else {
-                Write-Log "[SYMLINK] Target exists but missing Code.exe: $target"
+                Write-VSCodeUpdaterLog "[SYMLINK] Target exists but missing Code.exe: $target"
             }
         }
         else {
-            Write-Log "[SYMLINK] Target missing or invalid: $target"
+            Write-VSCodeUpdaterLog "[SYMLINK] Target missing or invalid: $target"
         }
     }
     catch {
-        Write-Log "[SYMLINK] Failed to read symlink: $($_.Exception.Message)"
+        Write-VSCodeUpdaterLog "[SYMLINK] Failed to read symlink: $($_.Exception.Message)"
     }
 
     return $info

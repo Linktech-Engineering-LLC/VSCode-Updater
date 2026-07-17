@@ -6,65 +6,73 @@
     Author: Leon McClatchey
     Company: Linktech Engineering LLC
     Created: 2026-04-16
-    Modified: 2026-04-17
+    Modified: 2026-07-17
     File: Private/Watchdog-MonitorInstaller.ps1
-    Version: 1.0.0
-    Description: Monitors the VS Code installer and related worker processes for CPU and disk activity, detects idle or stalled states, and terminates processes when the installer becomes unresponsive.
+    Version: 1.1.0
+    Description: Monitors the VS Code installer and related worker processes for CPU and disk activity,
+                 detects idle or stalled states, and terminates processes when the installer becomes
+                 unresponsive. Uses real-time loop deltas and basic invariants for stability.
 #>
+# PSScriptAnalyzer SuppressMessage = PSUseApprovedVerbs "Intentional verb"
 function Watchdog-MonitorInstaller {
+    [OutputType([Int32])]
     param(
         $ChildProcess,
         [int]$ParentPID,
         [int]$IdleTimeout
     )
-	if ($ParentPID -eq 0 -or -not (Get-Process -Id $ParentPID -ErrorAction SilentlyContinue)) {
-		Write-Log "[WATCHDOG] Invalid parent PID ($ParentPID) — aborting watchdog"
-		return 0
-	}
 
-    if ($script:SafeMode) {
-        Write-Log "[WATCHDOG] SAFE MODE — watchdog disabled"
-        return 0
+    if ($ParentPID -eq 0 -or -not (Get-Process -Id $ParentPID -ErrorAction SilentlyContinue)) {
+        Write-VSCodeUpdaterLog "[WATCHDOG] Invalid parent PID ($ParentPID) — aborting watchdog"
+        return [WatchdogExitCode]::Unknown
     }
 
-    $idleSeconds    = 0
-    $activeSeconds  = 0
-    $fsIdleSeconds  = 0
-    $lastState      = ""
-    $lastCPU        = 0
-    $lastDisk       = 0
-    $installPath    = "$env:LOCALAPPDATA\Programs\Microsoft VS Code"
-    $lastWriteTime  = (Get-Date)
-    $fsLogCooldown  = 30
-    $lastFsLog      = (Get-Date).AddSeconds(-10)
+    if ($script:SafeMode) {
+        Write-VSCodeUpdaterLog "[WATCHDOG] SAFE MODE — watchdog disabled"
+        return [WatchdogExitCode]::Success
+    }
 
-    Write-Log "[WATCHDOG] Monitoring child PID $($ChildProcess.Id), parent PID $ParentPID"
+    $idleSeconds = 0.0
+    $activeSeconds = 0.0
+    $fsIdleSeconds = 0.0
+    $lastState = ""
+    $lastCPU = 0.0
+    $lastDisk = 0
+    $installPath = "$env:LOCALAPPDATA\Programs\Microsoft VS Code"
+    $lastWriteTime = Get-Date
+    $fsLogCooldown = 30
+    $lastFsLog = (Get-Date).AddSeconds(-10)
+
+    $lastLoopTime = Get-Date
+
+    Write-VSCodeUpdaterLog "[WATCHDOG] Monitoring child PID $($ChildProcess.Id), parent PID $ParentPID"
 
     while ($true) {
-        Start-Sleep -Seconds 2
+        $now = Get-Date
+        $delta = ($now - $lastLoopTime).TotalSeconds
+        if ($delta -lt 0) { $delta = 0 }
+        $lastLoopTime = $now
 
-        # Re-query child
+        $fsIdleSeconds += $delta
+        $idleSeconds += $delta
+        $activeSeconds += $delta
+
         $child = Get-Process -Id $ChildProcess.Id -ErrorAction SilentlyContinue
 
-        # Detect child replacement
         if (-not $child) {
             $newChild = Get-Process -ErrorAction SilentlyContinue |
                 Where-Object { $_.Parent.Id -eq $ParentPID }
 
             if ($newChild) {
-                Write-Log "[WATCHDOG] Child replaced — new PID $($newChild.Id)"
+                Write-VSCodeUpdaterLog "[WATCHDOG] Child replaced — new PID $($newChild.Id)"
                 $ChildProcess = $newChild
                 continue
             }
 
-            Write-Log "[WATCHDOG] Child exited — success"
-            return 0
+            Write-VSCodeUpdaterLog "[WATCHDOG] Child exited — success"
+            return [WatchdogExitCode]::Success
         }
 
-        # FS idle timer
-        $fsIdleSeconds += 2
-
-        # Detect real installer writes
         try {
             $latestWrite = Get-ChildItem -Recurse $installPath -File -ErrorAction SilentlyContinue |
                 Where-Object {
@@ -77,77 +85,70 @@ function Watchdog-MonitorInstaller {
 
             if ($latestWrite -and $latestWrite.LastWriteTime -gt $lastWriteTime) {
                 if ((Get-Date) -gt $lastFsLog.AddSeconds($fsLogCooldown)) {
-                    Write-Log "[WATCHDOG] FS activity: $($latestWrite.Name)"
+                    Write-VSCodeUpdaterLog "[WATCHDOG] FS activity: $($latestWrite.Name)"
                     $lastFsLog = Get-Date
                 }
 
                 $lastWriteTime = $latestWrite.LastWriteTime
-                $fsIdleSeconds = 0
-                $activeSeconds = 0
-                $idleSeconds   = 0
+                $fsIdleSeconds = 0.0
+                $activeSeconds = 0.0
+                $idleSeconds = 0.0
             }
         }
-        catch {}
-
-        # FS stall
-        if ($fsIdleSeconds -ge $IdleTimeout) {
-            Write-Log "[WATCHDOG] FS stall — killing installer"
-            Stop-Process -Id $ChildProcess.Id -Force -ErrorAction SilentlyContinue
-            Stop-Process -Id $ParentPID     -Force -ErrorAction SilentlyContinue
-            return 93
+        catch {
+            Write-VSCodeUpdaterLog "[WATCHDOG] Exception: $($_.Exception.Message)"
         }
 
-        # CPU/disk delta
-        $cpuNow  = $child.CPU
+        if ($fsIdleSeconds -ge $IdleTimeout) {
+            Write-VSCodeUpdaterLog "[WATCHDOG] FS stall after {0:N2}s — killing installer" -f $fsIdleSeconds
+            Stop-Process -Id $ChildProcess.Id -Force -ErrorAction SilentlyContinue
+            Stop-Process -Id $ParentPID -Force -ErrorAction SilentlyContinue
+            return [WatchdogExitCode]::FSStalled
+        }
+
+        $cpuNow = $child.CPU
         $diskNow = $child.IOReadBytes + $child.IOWriteBytes
 
-        $cpuDelta  = $cpuNow  - $lastCPU
+        $cpuDelta = $cpuNow - $lastCPU
         $diskDelta = $diskNow - $lastDisk
 
-        $lastCPU  = $cpuNow
+        $lastCPU = $cpuNow
         $lastDisk = $diskNow
 
-        # Idle
         if ($cpuDelta -eq 0 -and $diskDelta -eq 0) {
-            $idleSeconds += 2
-
             if ($lastState -ne "Idle") {
-                Write-Log "[WATCHDOG] Child transitioned to idle"
+                Write-VSCodeUpdaterLog "[WATCHDOG] Child transitioned to idle"
                 $lastState = "Idle"
             }
 
             if ($idleSeconds -ge $IdleTimeout) {
-                Write-Log "[WATCHDOG] Idle stall — killing parent"
+                Write-VSCodeUpdaterLog "[WATCHDOG] Idle stall after {0:N2}s — killing parent" -f $idleSeconds
                 Stop-Process -Id $ParentPID -Force -ErrorAction SilentlyContinue
                 Wait-Process -Id $ChildProcess.Id -ErrorAction SilentlyContinue
-                return 91
-            }
-
-            continue
-        }
-
-        # Active
-        if ($lastState -ne "Active") {
-            Write-Log "[WATCHDOG] Child transitioned to active"
-            $lastState = "Active"
-        }
-
-        # Active stall
-        if ($cpuDelta -eq 0 -and $diskDelta -eq 0) {
-            $activeSeconds += 2
-
-            if ($activeSeconds -ge $IdleTimeout) {
-                Write-Log "[WATCHDOG] Active stall — killing parent and child"
-                Stop-Process -Id $ChildProcess.Id -Force -ErrorAction SilentlyContinue
-                Stop-Process -Id $ParentPID     -Force -ErrorAction SilentlyContinue
-                return 92
+                return [WatchdogExitCode]::IdleStalled
             }
         }
         else {
-            $activeSeconds = 0
+            if ($lastState -ne "Active") {
+                Write-VSCodeUpdaterLog "[WATCHDOG] Child transitioned to active"
+                $lastState = "Active"
+            }
+
+            if ($cpuDelta -eq 0 -and $diskDelta -eq 0) {
+                if ($activeSeconds -ge $IdleTimeout) {
+                    Write-VSCodeUpdaterLog "[WATCHDOG] Active stall after {0:N2}s — killing parent and child" -f $activeSeconds
+                    Stop-Process -Id $ChildProcess.Id -Force -ErrorAction SilentlyContinue
+                    Stop-Process -Id $ParentPID -Force -ErrorAction SilentlyContinue
+                    return [WatchdogExitCode]::ActiveStalled
+                }
+            }
+            else {
+                $activeSeconds = 0.0
+            }
+
+            $idleSeconds = 0.0
         }
 
-        # Reset idle counter
-        $idleSeconds = 0
+        Start-Sleep -Seconds 2
     }
 }

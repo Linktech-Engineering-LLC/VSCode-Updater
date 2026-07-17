@@ -32,7 +32,7 @@ function Test-InstallerEnvironment {
         $issues += "[CHECK] WebView2 runtime present: $wv2"
     }
 
-    foreach ($i in $issues) { Write-Log $i }
+    foreach ($i in $issues) { Write-VSCodeUpdaterLog $i }
 
     return $issues
 }

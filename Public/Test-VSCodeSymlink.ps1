@@ -17,7 +17,7 @@ function Test-VSCodeSymlink {
     param()
 
     if ($script:SafeMode) {
-        Write-Log "[VALIDATE] SAFE MODE — Symlink validation skipped"
+        Write-VSCodeUpdaterLog "[VALIDATE] SAFE MODE — Symlink validation skipped"
         return $true
     }
 
@@ -25,33 +25,33 @@ function Test-VSCodeSymlink {
     $linkPath = Join-Path $root "Microsoft VS Code"
 
     if (-not (Test-Path $linkPath)) {
-        Write-Log "[VALIDATE] Link missing: $linkPath"
+        Write-VSCodeUpdaterLog "[VALIDATE] Link missing: $linkPath"
         return $false
     }
 
     $item = Get-Item $linkPath -ErrorAction SilentlyContinue
     if (-not $item) {
-        Write-Log "[VALIDATE] Link exists but cannot be resolved"
+        Write-VSCodeUpdaterLog "[VALIDATE] Link exists but cannot be resolved"
         return $false
     }
 
-    Write-Log "[VALIDATE] LinkType detected: $($item.LinkType)"
+    Write-VSCodeUpdaterLog "[VALIDATE] LinkType detected: $($item.LinkType)"
 
     # Accept both symbolic links and junctions
     if ($item.LinkType -notin @("SymbolicLink", "Junction")) {
-        Write-Log "[VALIDATE] Invalid LinkType: $($item.LinkType)"
+        Write-VSCodeUpdaterLog "[VALIDATE] Invalid LinkType: $($item.LinkType)"
         return $false
     }
 
     # Extract target (symlink or junction)
     $target = $item.Target
     if (-not $target) {
-        Write-Log "[VALIDATE] Link target is null or empty"
+        Write-VSCodeUpdaterLog "[VALIDATE] Link target is null or empty"
         return $false
     }
 
     if (-not (Test-Path $target)) {
-        Write-Log "[VALIDATE] Link target missing: $target"
+        Write-VSCodeUpdaterLog "[VALIDATE] Link target missing: $target"
         return $false
     }
 
@@ -61,15 +61,15 @@ function Test-VSCodeSymlink {
     $productJson = Join-Path $resources "app\product.json"
 
     if (-not (Test-Path $codeExe)) {
-        Write-Log "[VALIDATE] Code.exe missing in target: $target"
+        Write-VSCodeUpdaterLog "[VALIDATE] Code.exe missing in target: $target"
         return $false
     }
     if (-not (Test-Path $resources)) {
-        Write-Log "[VALIDATE] resources folder missing in target: $target"
+        Write-VSCodeUpdaterLog "[VALIDATE] resources folder missing in target: $target"
         return $false
     }
     if (-not (Test-Path $productJson)) {
-        Write-Log "[VALIDATE] product.json missing in target: $target"
+        Write-VSCodeUpdaterLog "[VALIDATE] product.json missing in target: $target"
         return $false
     }
 
@@ -78,10 +78,10 @@ function Test-VSCodeSymlink {
         $null = Get-ChildItem $target -ErrorAction Stop
     }
     catch {
-        Write-Log "[VALIDATE] Target folder is locked or inaccessible: $target"
+        Write-VSCodeUpdaterLog "[VALIDATE] Target folder is locked or inaccessible: $target"
         return $false
     }
 
-    Write-Log "[VALIDATE] Link OK ($($item.LinkType)) → $target"
+    Write-VSCodeUpdaterLog "[VALIDATE] Link OK ($($item.LinkType)) → $target"
     return $true
 }

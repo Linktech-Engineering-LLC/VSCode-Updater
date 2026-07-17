@@ -19,10 +19,10 @@ function Set-VSCodeSafeMode {
 
     if ($Enabled) {
         _out "[SAFE] SAFE MODE ENABLED" "Yellow"
-        Write-Log "[SAFE] SAFE MODE ENABLED"
+        Write-VSCodeUpdaterLog "[SAFE] SAFE MODE ENABLED"
     }
     else {
         _out "[SAFE] SAFE MODE DISABLED" "Yellow"
-        Write-Log "[SAFE] SAFE MODE DISABLED"
+        Write-VSCodeUpdaterLog "[SAFE] SAFE MODE DISABLED"
     }
 }

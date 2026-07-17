@@ -19,7 +19,7 @@ Describe "Clear-VSCodeHelpers" -Tag 'Private' {
 
     BeforeAll {
         . "$PSScriptRoot/../../Private/Clear-VSCodeHelpers.ps1"
-        . "$PSScriptRoot/../../Private/Write-Log.ps1"
+        . "$PSScriptRoot/../../Private/Write-VSCodeUpdaterLog.ps1"
     }
 
     Context "When helper processes exist" {
@@ -35,7 +35,7 @@ Describe "Clear-VSCodeHelpers" -Tag 'Private' {
             }
 
             Mock -CommandName Stop-Process
-            Mock Write-Log {}
+            Mock Write-VSCodeUpdaterLog {}
         }
 
         It "terminates all matching helper processes" {
@@ -49,7 +49,7 @@ Describe "Clear-VSCodeHelpers" -Tag 'Private' {
         BeforeEach {
             Mock -CommandName Get-Process -MockWith { @() }
             Mock -CommandName Stop-Process
-            Mock Write-Log {}
+            Mock Write-VSCodeUpdaterLog {}
         }
 
         It "does not attempt to terminate anything" {

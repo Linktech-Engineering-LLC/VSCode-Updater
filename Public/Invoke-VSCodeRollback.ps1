@@ -29,7 +29,7 @@ function Invoke-VSCodeRollback {
         Sort-Object VersionName -Descending
 
     if ($versions.Count -lt 2) {
-        Write-Log "[ROLLBACK] Not enough valid versions to roll back"
+        Write-VSCodeUpdaterLog "[ROLLBACK] Not enough valid versions to roll back"
         return 90
     }
 
@@ -38,29 +38,29 @@ function Invoke-VSCodeRollback {
     $currentTarget = $info.TargetPath
     $activeVersion = $info.ActiveVersion
 
-    Write-Log "[ROLLBACK] Active version: $activeVersion"
-    Write-Log "[ROLLBACK] Target path: $currentTarget"
+    Write-VSCodeUpdaterLog "[ROLLBACK] Active version: $activeVersion"
+    Write-VSCodeUpdaterLog "[ROLLBACK] Target path: $currentTarget"
 
     # Find active version in list
     $currentIndex = $versions.VersionName.IndexOf($activeVersion)
     if ($currentIndex -lt 0) {
-        Write-Log "[ROLLBACK] Active version not found in version list — using newest"
+        Write-VSCodeUpdaterLog "[ROLLBACK] Active version not found in version list — using newest"
         $currentIndex = 0
     }
 
     # Determine previous version
     $previousIndex = $currentIndex + 1
     if ($previousIndex -ge $versions.Count) {
-        Write-Log "[ROLLBACK] No previous version found"
+        Write-VSCodeUpdaterLog "[ROLLBACK] No previous version found"
         return 91
     }
 
     $previous = $versions[$previousIndex].Path
-    Write-Log "[ROLLBACK] Rolling back to: $previous"
+    Write-VSCodeUpdaterLog "[ROLLBACK] Rolling back to: $previous"
 
     # Validate previous version
     if (-not (Test-Path $previous)) {
-        Write-Log "[ROLLBACK] Previous version missing"
+        Write-VSCodeUpdaterLog "[ROLLBACK] Previous version missing"
         return 92
     }
 
@@ -69,7 +69,7 @@ function Invoke-VSCodeRollback {
         $null = Get-ChildItem $previous -ErrorAction Stop
     }
     catch {
-        Write-Log "[ROLLBACK] Previous version folder is locked or inaccessible"
+        Write-VSCodeUpdaterLog "[ROLLBACK] Previous version folder is locked or inaccessible"
         return 93
     }
 
@@ -83,10 +83,10 @@ function Invoke-VSCodeRollback {
         New-Item -ItemType SymbolicLink -Path $linkPath -Target $previous | Out-Null
     }
     catch {
-        Write-Log "[ROLLBACK] Failed to create symlink: $($_.Exception.Message)"
+        Write-VSCodeUpdaterLog "[ROLLBACK] Failed to create symlink: $($_.Exception.Message)"
         return 94
     }
 
-    Write-Log "[ROLLBACK] Rollback complete"
+    Write-VSCodeUpdaterLog "[ROLLBACK] Rollback complete"
     return 0
 }

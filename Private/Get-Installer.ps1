@@ -11,41 +11,62 @@
     Version: 1.0.0
     Description: Retrieves the VS Code installer deterministically with support for Skip, Force, and Normal download modes, including hash validation and temp file cleanup.
 #>
-function Get-Installer {
+function Normalize-Scalar {
+    param($Value)
+    if ($Value -is [System.Array]) {
+        return $Value[-1]
+    }
+    return $Value
+}
+function Test-InstallerValid {
+    [OutputType([bool])]
     [CmdletBinding()]
     param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path $Path)) {
+        return $false
+    }
+
+    $info = Get-Item $Path -ErrorAction SilentlyContinue
+    if ($info.Length -lt 1MB) {
+        Write-VSCodeUpdaterLog "[INSTALLER] File too small (<1MB): $Path"
+        return $false
+    }
+
+    if ($info.Extension -ne ".exe") {
+        Write-VSCodeUpdaterLog "[INSTALLER] Invalid extension: $($info.Extension)"
+        return $false
+    }
+
+    return $true
+}
+
+function Get-Installer {
+    [OutputType([string])]
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
         [string]$Url,
+
+        [Parameter(Mandatory = $true)]
         [string]$CachePath,
 
-        [ValidateSet("Skip","Force","Normal")]
+        [ValidateSet("Skip", "Force", "Normal")]
         [string]$DownloadMode = "Normal"
     )
 
-    Write-Log "[DOWNLOAD] Mode: $DownloadMode"
-
-    # --- Helper: validate installer file ---
-    function Test-InstallerValid($Path) {
-        if (-not (Test-Path $Path)) { return $false }
-
-        $info = Get-Item $Path -ErrorAction SilentlyContinue
-        if ($info.Length -lt 1MB) {
-            Write-Log "[DOWNLOAD] Installer too small (<1MB): $Path"
-            return $false
-        }
-        if ($info.Extension -notin ".exe") {
-            Write-Log "[DOWNLOAD] Installer extension invalid: $($info.Extension)"
-            return $false
-        }
-        return $true
-    }
+    Write-VSCodeUpdaterLog "[INSTALLER] Mode: $DownloadMode"
 
     switch ($DownloadMode) {
 
         "Skip" {
-            Write-Log "[DOWNLOAD] Skip mode — using cached installer only"
+            Write-VSCodeUpdaterLog "[INSTALLER] Skip mode — using cached installer only"
 
-            if (-not (Test-InstallerValid $CachePath)) {
-                Write-Log "[ERROR] Skip mode used but cached installer is missing or invalid"
+            if (-not (Test-InstallerValid -Path $CachePath)) {
+                Write-VSCodeUpdaterLog "[INSTALLER] Skip mode failed — cached installer missing or invalid"
                 return $null
             }
 
@@ -53,18 +74,18 @@ function Get-Installer {
         }
 
         "Force" {
-            Write-Log "[DOWNLOAD] Force mode — downloading fresh installer"
+            Write-VSCodeUpdaterLog "[INSTALLER] Force mode — downloading fresh installer"
 
             try {
                 Invoke-WebRequest -Uri $Url -OutFile $CachePath -UseBasicParsing -ErrorAction Stop
             }
             catch {
-                Write-Log "[ERROR] Forced download failed: $($_.Exception.Message)"
+                Write-VSCodeUpdaterLog "[INSTALLER] Forced download failed: $($_.Exception.Message)"
                 return $null
             }
 
-            if (-not (Test-InstallerValid $CachePath)) {
-                Write-Log "[ERROR] Forced download produced invalid installer"
+            if (-not (Test-InstallerValid -Path $CachePath)) {
+                Write-VSCodeUpdaterLog "[INSTALLER] Forced download produced invalid installer"
                 return $null
             }
 
@@ -72,64 +93,61 @@ function Get-Installer {
         }
 
         "Normal" {
-            Write-Log "[DOWNLOAD] Normal mode — checking cache"
+            Write-VSCodeUpdaterLog "[INSTALLER] Normal mode — checking cache"
 
-            if (Test-InstallerValid $CachePath) {
-                Write-Log "[DOWNLOAD] Cached installer exists — checking for update"
+            if (Test-InstallerValid -Path $CachePath) {
+                Write-VSCodeUpdaterLog "[INSTALLER] Cached installer exists — checking for update"
 
-                $temp = Join-Path $env:TEMP "installer.exe"
+                $temp = Join-Path $env:TEMP "installer.tmp.exe"
 
-                # Clean stale temp file
                 if (Test-Path $temp) {
-                    Remove-Item $temp -Force -ErrorAction SilentlyContinue
+                    Remove-Item $temp -Force -ErrorAction SilentlyContinue | Out-Null
                 }
 
-                # Download new installer
                 try {
                     Invoke-WebRequest -Uri $Url -OutFile $temp -UseBasicParsing -ErrorAction Stop
                 }
                 catch {
-                    Write-Log "[ERROR] Failed to download installer: $($_.Exception.Message)"
+                    Write-VSCodeUpdaterLog "[INSTALLER] Failed to download installer: $($_.Exception.Message)"
                     return $null
                 }
 
-                if (-not (Test-InstallerValid $temp)) {
-                    Write-Log "[ERROR] Downloaded installer is invalid"
-                    Remove-Item $temp -Force -ErrorAction SilentlyContinue
+                if (-not (Test-InstallerValid -Path $temp)) {
+                    Write-VSCodeUpdaterLog "[INSTALLER] Downloaded installer is invalid"
+                    Remove-Item $temp -Force -ErrorAction SilentlyContinue | Out-Null
                     return $null
                 }
 
-                $cachedHash = Get-FileHashSafe -Path $CachePath
-                $newHash    = Get-FileHashSafe -Path $temp
+                $cachedHash = Normalize-Scalar(Get-FileHashSafe -Path $CachePath)
+                $newHash = Normalize-Scalar(Get-FileHashSafe -Path $temp)
 
-                Write-Log "[DOWNLOAD] Cached hash: $cachedHash"
-                Write-Log "[DOWNLOAD] New hash:    $newHash"
+                Write-VSCodeUpdaterLog "[INSTALLER] Cached hash: $cachedHash"
+                Write-VSCodeUpdaterLog "[INSTALLER] New hash:    $newHash"
 
                 if ($cachedHash -eq $newHash) {
-                    Write-Log "[DOWNLOAD] Installer unchanged — keeping cached copy"
-                    Remove-Item $temp -Force -ErrorAction SilentlyContinue
+                    Write-VSCodeUpdaterLog "[INSTALLER] Installer unchanged — keeping cached copy"
+                    Remove-Item $temp -Force -ErrorAction SilentlyContinue | Out-Null
                     return $CachePath
                 }
 
-                Write-Log "[DOWNLOAD] Installer updated — replacing cached copy"
+                Write-VSCodeUpdaterLog "[INSTALLER] Installer updated — replacing cached copy"
                 Copy-Item $temp $CachePath -Force
-                Remove-Item $temp -Force -ErrorAction SilentlyContinue
+                Remove-Item $temp -Force -ErrorAction SilentlyContinue | Out-Null
                 return $CachePath
             }
 
-            # No cache exists — download fresh
-            Write-Log "[DOWNLOAD] No cached installer — downloading fresh copy"
+            Write-VSCodeUpdaterLog "[INSTALLER] No cached installer — downloading fresh copy"
 
             try {
                 Invoke-WebRequest -Uri $Url -OutFile $CachePath -UseBasicParsing -ErrorAction Stop
             }
             catch {
-                Write-Log "[ERROR] Failed to download installer: $($_.Exception.Message)"
+                Write-VSCodeUpdaterLog "[INSTALLER] Failed to download installer: $($_.Exception.Message)"
                 return $null
             }
 
-            if (-not (Test-InstallerValid $CachePath)) {
-                Write-Log "[ERROR] Fresh download produced invalid installer"
+            if (-not (Test-InstallerValid -Path $CachePath)) {
+                Write-VSCodeUpdaterLog "[INSTALLER] Fresh download produced invalid installer"
                 return $null
             }
 

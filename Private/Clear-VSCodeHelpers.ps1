@@ -12,7 +12,7 @@
     Description: Terminates VS Code helper, setup, and orphaned installer processes to ensure a clean update state.
 #>
 function Clear-VSCodeHelpers {
-    Write-Log "[CLEANUP] Checking for VS Code and installer helper processes"
+    Write-VSCodeUpdaterLog "[CLEANUP] Checking for VS Code and installer helper processes"
 
     # Installer PID passed from Update-VSCode
     $installerPID = $script:CurrentInstallerPID
@@ -34,7 +34,7 @@ function Clear-VSCodeHelpers {
         }
 
     if ($helpers) {
-        Write-Log "[CLEANUP] Terminating helper PIDs (fast scan): $($helpers.Id -join ', ')"
+        Write-VSCodeUpdaterLog "[CLEANUP] Terminating helper PIDs (fast scan): $($helpers.Id -join ', ')"
         $helpers | Stop-Process -Force -ErrorAction SilentlyContinue
         return
     }
@@ -42,7 +42,7 @@ function Clear-VSCodeHelpers {
     #
     # PHASE 2 — DEEP SCAN
     #
-    Write-Log "[CLEANUP] No helper processes found in fast scan — running deep scan"
+    Write-VSCodeUpdaterLog "[CLEANUP] No helper processes found in fast scan — running deep scan"
 
     $candidates = Get-Process -ErrorAction SilentlyContinue |
         Where-Object {
@@ -65,11 +65,11 @@ function Clear-VSCodeHelpers {
         }
 
     if ($helpers) {
-        Write-Log "[CLEANUP] Terminating helper PIDs (deep scan): $($helpers.Id -join ', ')"
+        Write-VSCodeUpdaterLog "[CLEANUP] Terminating helper PIDs (deep scan): $($helpers.Id -join ', ')"
         $helpers | Stop-Process -Force -ErrorAction SilentlyContinue
     }
     else {
-        Write-Log "[CLEANUP] No VS Code helper processes found"
+        Write-VSCodeUpdaterLog "[CLEANUP] No VS Code helper processes found"
     }
 
     Out-Null

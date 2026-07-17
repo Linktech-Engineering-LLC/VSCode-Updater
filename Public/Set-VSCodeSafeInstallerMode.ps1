@@ -18,6 +18,6 @@ function Set-VSCodeSafeInstallerMode {
     )
 
     $script:VSU_SafeInstallerMode = $Enabled
-    Write-Log "[CONFIG] Safe installer mode set to: $Enabled"
+    Write-VSCodeUpdaterLog "[CONFIG] Safe installer mode set to: $Enabled"
 }
 Export-ModuleMember -Function Set-VSCodeSafeInstallerMode

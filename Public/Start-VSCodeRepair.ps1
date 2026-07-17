@@ -17,17 +17,17 @@ function Start-VSCodeRepair {
         [switch]$DryRun
     )
 
-    Write-Log "[REPAIR] VS Code repair requested (DryRun=$($DryRun.IsPresent))"
+    Write-VSCodeUpdaterLog "[REPAIR] VS Code repair requested (DryRun=$($DryRun.IsPresent))"
 
     $issues = Test-InstallerEnvironment
 
     if ($DryRun) {
-        Write-Log "[REPAIR] Dry run only — no changes applied"
+        Write-VSCodeUpdaterLog "[REPAIR] Dry run only — no changes applied"
         return $issues
     }
 
     Fix-InstallerFreeze
 
-    Write-Log "[REPAIR] Environment repaired — you may re-run Update-VSCode"
+    Write-VSCodeUpdaterLog "[REPAIR] Environment repaired — you may re-run Update-VSCode"
     return $issues
 }

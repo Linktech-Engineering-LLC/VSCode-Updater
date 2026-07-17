@@ -12,7 +12,7 @@
     Description: Terminates VS Code setup bootstrapper processes to ensure a clean update state.
 #>
 function Clear-SetupBootstrapper {
-    Write-Log "[CLEANUP] Checking for Setup bootstrapper processes"
+    Write-VSCodeUpdaterLog "[CLEANUP] Checking for Setup bootstrapper processes"
 
     #
     # PHASE 1 — FAST DETECTION (names only)
@@ -30,7 +30,7 @@ function Clear-SetupBootstrapper {
         }
 
     if ($setup) {
-        Write-Log "[CLEANUP] Found bootstrapper processes (fast scan) — terminating"
+        Write-VSCodeUpdaterLog "[CLEANUP] Found bootstrapper processes (fast scan) — terminating"
         $setup | Stop-Process -Force
         return
     }
@@ -39,7 +39,7 @@ function Clear-SetupBootstrapper {
     # PHASE 2 — SLOW DETECTION (path + command line)
     # Only runs if Phase 1 found nothing. This avoids hitting protected processes every run.
     #
-    Write-Log "[CLEANUP] No bootstrapper processes found in fast scan — running deep scan"
+    Write-VSCodeUpdaterLog "[CLEANUP] No bootstrapper processes found in fast scan — running deep scan"
 
 	# Candidate processes based on name only
 	$candidates = Get-Process -ErrorAction SilentlyContinue |
@@ -60,11 +60,11 @@ function Clear-SetupBootstrapper {
 		}
 
     if ($setup) {
-        Write-Log "[CLEANUP] Found bootstrapper processes (deep scan) — terminating"
+        Write-VSCodeUpdaterLog "[CLEANUP] Found bootstrapper processes (deep scan) — terminating"
         $setup | Stop-Process -Force
     }
     else {
-        Write-Log "[CLEANUP] No setup bootstrapper processes found"
+        Write-VSCodeUpdaterLog "[CLEANUP] No setup bootstrapper processes found"
     }
 	Out-Null
 }

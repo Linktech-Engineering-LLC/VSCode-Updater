@@ -29,7 +29,7 @@ function Update-VSCodeVersions {
             $active = (Get-Item $linkPath).Target | Resolve-Path
         }
         catch {
-            Write-Log "[CLEANUP] Warning: Failed to resolve active symlink"
+            Write-VSCodeUpdaterLog "[CLEANUP] Warning: Failed to resolve active symlink"
         }
     }
 
@@ -38,7 +38,7 @@ function Update-VSCodeVersions {
         Sort-Object Name -Descending
 
     if ($versions.Count -le $Keep) {
-        Write-Log "[CLEANUP] No old versions to remove"
+        Write-VSCodeUpdaterLog "[CLEANUP] No old versions to remove"
         return 0
     }
 
@@ -49,7 +49,7 @@ function Update-VSCodeVersions {
 
         # Skip active version
         if ($active -and ($dir.FullName -eq $active)) {
-            Write-Log "[CLEANUP] Skipping active version: $($dir.FullName)"
+            Write-VSCodeUpdaterLog "[CLEANUP] Skipping active version: $($dir.FullName)"
             continue
         }
 
@@ -58,21 +58,21 @@ function Update-VSCodeVersions {
             $null = Get-ChildItem $dir.FullName -ErrorAction Stop
         }
         catch {
-            Write-Log "[CLEANUP] Folder locked or inaccessible: $($dir.FullName)"
+            Write-VSCodeUpdaterLog "[CLEANUP] Folder locked or inaccessible: $($dir.FullName)"
             continue
         }
 
-        Write-Log "[CLEANUP] Removing old VS Code version: $($dir.FullName)"
+        Write-VSCodeUpdaterLog "[CLEANUP] Removing old VS Code version: $($dir.FullName)"
 
         try {
             Remove-Item $dir.FullName -Recurse -Force -ErrorAction Stop
             $removed++
         }
         catch {
-            Write-Log "[CLEANUP] Failed to remove $($dir.FullName): $($_.Exception.Message)"
+            Write-VSCodeUpdaterLog "[CLEANUP] Failed to remove $($dir.FullName): $($_.Exception.Message)"
         }
     }
 
-    Write-Log "[CLEANUP] Removed $removed old version(s)"
+    Write-VSCodeUpdaterLog "[CLEANUP] Removed $removed old version(s)"
     return $null
 }

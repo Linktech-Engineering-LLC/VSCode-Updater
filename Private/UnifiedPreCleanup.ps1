@@ -19,7 +19,7 @@ function Invoke-VSUPreCleanup {
         [string]$InstallRoot
     )
 
-    Write-Log "[PRE] Starting unified pre‑installation cleanup"
+    Write-VSCodeUpdaterLog "[PRE] Starting unified pre‑installation cleanup"
 
     # =====================================================================
     # 1. Kill ALL VS Code processes
@@ -37,7 +37,7 @@ function Invoke-VSUPreCleanup {
     foreach ($p in $vsProcesses) {
         Get-Process -Name $p -ErrorAction SilentlyContinue |
             ForEach-Object {
-                Write-Log "[PRE] Killing VS Code process: $($_.Name) (PID=$($_.Id))"
+                Write-VSCodeUpdaterLog "[PRE] Killing VS Code process: $($_.Name) (PID=$($_.Id))"
                 Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
             }
     }
@@ -57,7 +57,7 @@ function Invoke-VSUPreCleanup {
     foreach ($p in $installerProcesses) {
         Get-Process -Name $p -ErrorAction SilentlyContinue |
             ForEach-Object {
-                Write-Log "[PRE] Killing installer/bootstrapper: $($_.Name) (PID=$($_.Id))"
+                Write-VSCodeUpdaterLog "[PRE] Killing installer/bootstrapper: $($_.Name) (PID=$($_.Id))"
                 Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
             }
     }
@@ -72,11 +72,11 @@ function Invoke-VSUPreCleanup {
         $item = Get-Item $symlinkPath -Force
 
         if ($item.Attributes -match "ReparsePoint") {
-            Write-Log "[PRE] Removing VSCode junction: $symlinkPath"
+            Write-VSCodeUpdaterLog "[PRE] Removing VSCode junction: $symlinkPath"
             Remove-Item $symlinkPath -Force -ErrorAction SilentlyContinue
         }
         else {
-            Write-Log "[PRE] VSCode path exists but is not a junction — removing"
+            Write-VSCodeUpdaterLog "[PRE] VSCode path exists but is not a junction — removing"
             Remove-Item $symlinkPath -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
@@ -85,7 +85,7 @@ function Invoke-VSUPreCleanup {
     # 4. Prune old installation folders (keep newest two)
     # =====================================================================
 
-    Write-Log "[PRE] Pruning old installation folders"
+    Write-VSCodeUpdaterLog "[PRE] Pruning old installation folders"
 
     $patternOld = '^VSCode-\d{8}-\d{6}$'
     $patternNew = '^VSCode-\d{14}$'
@@ -100,7 +100,7 @@ function Invoke-VSUPreCleanup {
     if ($folders.Count -gt 2) {
         $toDelete = $folders | Select-Object -Skip 2
         foreach ($f in $toDelete) {
-            Write-Log "[PRE] Removing old version folder: $($f.FullName)"
+            Write-VSCodeUpdaterLog "[PRE] Removing old version folder: $($f.FullName)"
             Remove-Item $f.FullName -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
@@ -109,7 +109,7 @@ function Invoke-VSUPreCleanup {
     # 5. Remove debris (staging, partial installs, temp folders)
     # =====================================================================
 
-    Write-Log "[PRE] Removing debris"
+    Write-VSCodeUpdaterLog "[PRE] Removing debris"
 
     $debrisPatterns = @(
         "new_*",
@@ -123,7 +123,7 @@ function Invoke-VSUPreCleanup {
     foreach ($pattern in $debrisPatterns) {
         Get-ChildItem $InstallRoot -Filter $pattern -ErrorAction SilentlyContinue |
             ForEach-Object {
-                Write-Log "[PRE] Removing debris: $($_.FullName)"
+                Write-VSCodeUpdaterLog "[PRE] Removing debris: $($_.FullName)"
                 Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
             }
     }
@@ -132,14 +132,14 @@ function Invoke-VSUPreCleanup {
     # 6. Clean installation path (your existing function)
     # =====================================================================
 
-    Write-Log "[PRE] Cleaning installation path"
+    Write-VSCodeUpdaterLog "[PRE] Cleaning installation path"
     CleanCodePath | Out-Null
 
     # =====================================================================
     # 7. Validate environment
     # =====================================================================
 
-    Write-Log "[PRE] Validating installer environment"
+    Write-VSCodeUpdaterLog "[PRE] Validating installer environment"
     Test-InstallerEnvironment | Out-Null
 
     # =====================================================================
@@ -147,12 +147,12 @@ function Invoke-VSUPreCleanup {
     # =====================================================================
 
     if ($script:VSU_SafeInstallerMode) {
-        Write-Log "[PRE] Safe installer mode enabled — applying freeze remediation"
+        Write-VSCodeUpdaterLog "[PRE] Safe installer mode enabled — applying freeze remediation"
         Invoke-InstallerFreezeRemediation | Out-Null
     }
     else {
-        Write-Log "[PRE] Safe installer mode disabled — skipping freeze remediation"
+        Write-VSCodeUpdaterLog "[PRE] Safe installer mode disabled — skipping freeze remediation"
     }
 
-    Write-Log "[PRE] Unified pre‑installation cleanup complete"
+    Write-VSCodeUpdaterLog "[PRE] Unified pre‑installation cleanup complete"
 }

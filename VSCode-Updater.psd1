@@ -12,12 +12,12 @@
     Description: Module manifest defining metadata, versioning, and export configuration for the VSCode-Updater module.
 #>
 @{
-    RootModule        = 'VSCode-Updater.psm1'
-    ModuleVersion     = '2.2.0'
-    GUID              = 'f2776614-4b50-45ba-b8fe-63875c447ab5'
-    Author            = 'Leon McClatchey'
-    CompanyName       = 'Linktech Engineering LLC'
-    Description       = 'Deterministic, audit-transparent VS Code updater for Windows.'
+    RootModule = 'VSCode-Updater.psm1'
+    ModuleVersion = '2.2.0'
+    GUID = 'f2776614-4b50-45ba-b8fe-63875c447ab5'
+    Author = 'Leon McClatchey'
+    CompanyName = 'Linktech Engineering LLC'
+    Description = 'Deterministic, audit-transparent VS Code updater for Windows.'
     PowerShellVersion = '7.0'
     FunctionsToExport = @(
         'Update-VSCode',
@@ -27,20 +27,22 @@
         'Test-VSCodeSymlink',
         'Start-VSCodeSafeMode',
         'Get-VSCodeDashboard',
+        'Invoke-InstallerWrapper',
         'Invoke-ZipFallback',
         'Get-VSCodeSymlinkInfo',
         'Get-VSCodeLastResult',
         'Set-VSCodeSafeMode',
         'Start-VSCodeRepair',
-        'Set-VSCodeSafeInstallerMode'
+        'Set-VSCodeSafeInstallerMode',
+        'Test-VSCodeInstall'
     )
 
     PrivateData = @{
         PSData = @{
-            ProjectUri  = 'https://github.com/Linktech-Engineering-LLC/VSCode-Updater'
-            LicenseUri  = 'https://github.com/Linktech-Engineering-LLC/VSCode-Updater/blob/main/LICENSE'
-            IconUri     = 'https://raw.githubusercontent.com/Linktech-Engineering-LLC/VSCode-Updater/main/icon.png'
-            Tags        = @('vscode','update','automation','windows','powershell','devtools')
+            ProjectUri = 'https://github.com/Linktech-Engineering-LLC/VSCode-Updater'
+            LicenseUri = 'https://github.com/Linktech-Engineering-LLC/VSCode-Updater/blob/main/LICENSE'
+            IconUri = 'https://raw.githubusercontent.com/Linktech-Engineering-LLC/VSCode-Updater/main/icon.png'
+            Tags = @('vscode' , 'update' , 'automation' , 'windows' , 'powershell' , 'devtools')
             ReleaseNotes = 'Initial public release of VSCode-Updater.'
         }
     }

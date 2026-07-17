@@ -44,14 +44,14 @@ function Get-VSCodeVersions {
             $null = Get-ChildItem $path -ErrorAction Stop
         }
         catch {
-            Write-Log "[VERSIONS] Skipping locked folder: $path"
+            Write-VSCodeUpdaterLog "[VERSIONS] Skipping locked folder: $path"
             continue
         }
 
         $isValid = ($null -ne $codeExe) -and ($null -ne $productJson)
 
         if (-not $isValid) {
-            Write-Log "[VERSIONS] Invalid VS Code folder: $path"
+            Write-VSCodeUpdaterLog "[VERSIONS] Invalid VS Code folder: $path"
         }
 
         $results += [PSCustomObject]@{

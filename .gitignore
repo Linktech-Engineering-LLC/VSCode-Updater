@@ -46,3 +46,6 @@ Modules/
 # Ignore anything you explicitly mark as private
 Private/*.local.ps1
 Logs
+# PSScriptAnalyzer settings (local-only)
+PSScriptAnalyzerSettings.psd1
+debug.ps1

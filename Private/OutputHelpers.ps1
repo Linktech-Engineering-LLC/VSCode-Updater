@@ -14,7 +14,7 @@
 function _out {
     param([string]$msg, [string]$color = "White")
 
-    Write-Log $msg
+    Write-VSCodeUpdaterLog $msg
 
     if ($global:txtCommandOutput -and $global:window) {
         Write-TerminalLine $msg $color

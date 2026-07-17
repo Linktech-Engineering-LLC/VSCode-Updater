@@ -7,15 +7,15 @@
     Company: Linktech Engineering LLC
     Created: 2026-07-05
     Modified: 2026-07-05
-    File: Write-Log.Tests.ps1
+    File: Write-VSCodeUpdaterLog.Tests.ps1
     Version: 1.0.0
     Description: Description goes here
 #>
 
-Describe "Write-Log" {
+Describe "Write-VSCodeUpdaterLog" {
 
     BeforeAll {
-        . "$PSScriptRoot/../../Private/Write-Log.ps1"
+        . "$PSScriptRoot/../../Private/Write-VSCodeUpdaterLog.ps1"
     }
 
     It "creates the log directory if missing" {
@@ -24,7 +24,7 @@ Describe "Write-Log" {
         Mock Add-Content {}
         Mock Write-Host {}
 
-        Write-Log "Hello"
+        Write-VSCodeUpdaterLog "Hello"
 
         Should -Invoke New-Item -Times 1
     }
@@ -34,7 +34,7 @@ Describe "Write-Log" {
         Mock Add-Content {}
         Mock Write-Host {}
 
-        Write-Log "Test message"
+        Write-VSCodeUpdaterLog "Test message"
 
         Should -Invoke Add-Content -Times 1
     }

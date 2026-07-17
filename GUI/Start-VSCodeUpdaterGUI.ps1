@@ -18,7 +18,7 @@ Remove-Module VSCode-Updater -ErrorAction SilentlyContinue
 Import-Module "$PSScriptRoot\..\VSCode-Updater.psd1" -Force
 
 . "$PSScriptRoot\..\Private\OutputHelpers.ps1"
-. "$PSScriptRoot\..\Private\Write-Log.ps1"
+. "$PSScriptRoot\..\Private\Write-VSCodeUpdaterLog.ps1"
 . "$PSScriptRoot\..\Private\Get-SelectedVersionName.ps1"
 
 # Simple view-model for GUI state
@@ -424,7 +424,7 @@ function Start-VSCodeUpdaterGUI {
         }
 
         Write-TerminalLine "Selected Version: $($selected.Version)" "LightBlue"
-        Write-Log "Selected Version: $($selected.Version)"
+        Write-VSCodeUpdaterLog "Selected Version: $($selected.Version)"
     })
 
     $chkAutoScroll.Add_Checked({
