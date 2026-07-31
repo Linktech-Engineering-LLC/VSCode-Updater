@@ -36,17 +36,17 @@ function Clear-InnoSetupWorkers {
         Where-Object {
             $_.Id -ne $parentPID -and (
                 $_.Name -match '^is-[A-Za-z0-9]+' -or
-                $_.Name -match 'Setup'           -or
-                $_.Name -match 'CodeSetup'       -or
+                $_.Name -match 'Setup' -or
+                $_.Name -match 'CodeSetup' -or
                 $_.Name -match 'VSCodeSetup'
             )
         }
 
     $workers = $candidates |
         Where-Object {
-            ($_.Path        -and $_.Path        -match 'is-[A-Za-z0-9]+\.tmp') -or
+            ($_.Path -and $_.Path -match 'is-[A-Za-z0-9]+\.tmp') -or
             ($_.CommandLine -and $_.CommandLine -match 'is-[A-Za-z0-9]+\.tmp') -or
-            ($_.CommandLine -and $_.CommandLine -match 'CodeSetup')            -or
+            ($_.CommandLine -and $_.CommandLine -match 'CodeSetup') -or
             ($_.CommandLine -and $_.CommandLine -match 'VSCodeSetup')
         }
 

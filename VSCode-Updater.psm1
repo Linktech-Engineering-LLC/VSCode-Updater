@@ -64,9 +64,9 @@ function Update-VSCode {
     }
 
     $finalResult = $null
-    $installerUrl = "https://update.code.visualstudio.com/latest/win32-x64/stable"
+    $installerUrl = "https://update.code.visualstudio.com/latest/win32-x64-user/stable"
     $cacheDir = Join-Path $PSScriptRoot "..\Cache"
-    $cachedInstaller = Join-Path $cacheDir "VSCodeSetup.exe"
+    $cachedInstaller = Join-Path $cacheDir "VSCodeUserSetup.exe"
 
     $cachedInstaller = Normalize-Scalar(Get-Installer -Url $installerUrl -CachePath $cachedInstaller -DownloadMode "Normal")
 
@@ -151,7 +151,11 @@ function Update-VSCode {
 
         $null = Write-VSCodeUpdaterLog "[CHECK] Running post-install health validation"
 
-        $codeExe = Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code\Code.exe"
+        $codeExe = Find-UserVSCode
+        if (-not $codeExe) {
+            Write-VSCodeUpdaterLog "[CHECK] No user-space VS Code installation detected — aborting instead of ZIP fallback"
+            return [WatchdogExitCode]::MissingCodeExe
+        }
 
         if (-not (Test-Path $codeExe)) {
             $null = Write-VSCodeUpdaterLog "[CHECK] Code.exe missing — invoking ZIP fallback"

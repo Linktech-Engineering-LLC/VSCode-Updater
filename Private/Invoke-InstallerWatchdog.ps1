@@ -7,14 +7,14 @@
     Company: Linktech Engineering LLC
     Created: 2026-04-16
     Modified: 2026-07-17
-    File: Private/Watchdog-MonitorInstaller.ps1
+    File: Private/Invoke-InstallerWatchdog.ps1
     Version: 1.1.0
     Description: Monitors the VS Code installer and related worker processes for CPU and disk activity,
                  detects idle or stalled states, and terminates processes when the installer becomes
                  unresponsive. Uses real-time loop deltas and basic invariants for stability.
 #>
 # PSScriptAnalyzer SuppressMessage = PSUseApprovedVerbs "Intentional verb"
-function Watchdog-MonitorInstaller {
+function Invoke-InstallerWatchdog {
     [OutputType([Int32])]
     param(
         $ChildProcess,
@@ -38,7 +38,23 @@ function Watchdog-MonitorInstaller {
     $lastState = ""
     $lastCPU = 0.0
     $lastDisk = 0
-    $installPath = "$env:LOCALAPPDATA\Programs\Microsoft VS Code"
+
+    # Detect real VS Code install path from the 'code' command
+    $codeCmd = Get-Command code -ErrorAction SilentlyContinue
+
+    $installPaths = @()
+
+    if ($codeCmd -and $codeCmd.Source) {
+        $installPaths += (Split-Path $codeCmd.Source -Parent)
+    }
+
+    # Fallbacks
+    $installPaths += @(
+        "$env:LOCALAPPDATA\Programs\Microsoft VS Code",
+        "$env:LOCALAPPDATA\Programs\VSCode",
+        $env:TEMP
+    )
+
     $lastWriteTime = Get-Date
     $fsLogCooldown = 30
     $lastFsLog = (Get-Date).AddSeconds(-10)
@@ -46,6 +62,12 @@ function Watchdog-MonitorInstaller {
     $lastLoopTime = Get-Date
 
     Write-VSCodeUpdaterLog "[WATCHDOG] Monitoring child PID $($ChildProcess.Id), parent PID $ParentPID"
+
+    # Grace period: let installer initialize
+    Start-Sleep -Seconds 3
+    $fsIdleSeconds = 0.0
+    $idleSeconds = 0.0
+    $activeSeconds = 0.0
 
     while ($true) {
         $now = Get-Date
@@ -74,18 +96,33 @@ function Watchdog-MonitorInstaller {
         }
 
         try {
-            $latestWrite = Get-ChildItem -Recurse $installPath -File -ErrorAction SilentlyContinue |
-                Where-Object {
-                    $_.Extension -notin '.log', '.tmp', '.bak' -and
-                    $_.FullName -notmatch '\\logs?\\' -and
-                    $_.FullName -notmatch '\\Crashpad\\'
-                } |
-                Sort-Object LastWriteTime |
-                Select-Object -Last 1
+            $latestWrite = $null
+
+            foreach ($path in $installPaths) {
+                try {
+                    if (Test-Path $path) {
+                        $candidate = Get-ChildItem -Recurse $path -File -ErrorAction SilentlyContinue |
+                            Where-Object {
+                                $_.Extension -notin '.log', '.tmp', '.bak' -and
+                                $_.FullName -notmatch '\\logs?\\' -and
+                                $_.FullName -notmatch '\\Crashpad\\'
+                            } |
+                            Sort-Object LastWriteTime |
+                            Select-Object -Last 1
+
+                        if ($candidate -and (!$latestWrite -or $candidate.LastWriteTime -gt $latestWrite.LastWriteTime)) {
+                            $latestWrite = $candidate
+                        }
+                    }
+                }
+                catch {
+                    Write-VSCodeUpdaterLog "[WATCHDOG] FS scan exception on $($path): $($_.Exception.Message)"
+                }
+            }
 
             if ($latestWrite -and $latestWrite.LastWriteTime -gt $lastWriteTime) {
                 if ((Get-Date) -gt $lastFsLog.AddSeconds($fsLogCooldown)) {
-                    Write-VSCodeUpdaterLog "[WATCHDOG] FS activity: $($latestWrite.Name)"
+                    Write-VSCodeUpdaterLog "[WATCHDOG] FS activity: $($latestWrite.FullName)"
                     $lastFsLog = Get-Date
                 }
 

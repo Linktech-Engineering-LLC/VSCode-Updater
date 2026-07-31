@@ -37,30 +37,30 @@ function Write-TerminalLine {
     }
 
     $global:window.Dispatcher.Invoke({
-        if (-not $txtCommandOutput.Document) {
-            $txtCommandOutput.Document = New-Object System.Windows.Documents.FlowDocument
-        }
+            if (-not $txtCommandOutput.Document) {
+                $txtCommandOutput.Document = New-Object System.Windows.Documents.FlowDocument
+            }
 
-        $paragraph = New-Object System.Windows.Documents.Paragraph
-        $paragraph.Margin = [System.Windows.Thickness]::new(0)
+            $paragraph = New-Object System.Windows.Documents.Paragraph
+            $paragraph.Margin = [System.Windows.Thickness]::new(0)
 
-        $run = New-Object System.Windows.Documents.Run
-        $run.Text = $Text
+            $run = New-Object System.Windows.Documents.Run
+            $run.Text = $Text
 
-        # Safe color conversion
-        try {
-            $brush = [System.Windows.Media.Brushes]::$Color
-            $run.Foreground = $brush
-        }
-        catch {
-            $run.Foreground = [System.Windows.Media.Brushes]::White
-        }
+            # Safe color conversion
+            try {
+                $brush = [System.Windows.Media.Brushes]::$Color
+                $run.Foreground = $brush
+            }
+            catch {
+                $run.Foreground = [System.Windows.Media.Brushes]::White
+            }
 
-        $paragraph.Inlines.Add($run)
+            $paragraph.Inlines.Add($run)
 
-        $txtCommandOutput.Document.Blocks.Add($paragraph)
-        $txtCommandOutput.CaretPosition = $txtCommandOutput.Document.ContentEnd
-        $txtCommandOutput.ScrollToEnd()
-        $txtCommandOutput.UpdateLayout()
-    })
+            $txtCommandOutput.Document.Blocks.Add($paragraph)
+            $txtCommandOutput.CaretPosition = $txtCommandOutput.Document.ContentEnd
+            $txtCommandOutput.ScrollToEnd()
+            $txtCommandOutput.UpdateLayout()
+        })
 }

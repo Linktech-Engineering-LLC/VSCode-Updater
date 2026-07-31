@@ -44,7 +44,13 @@ function Invoke-InstallerWrapper {
         $childPID = $child.ProcessId
         Write-VSCodeUpdaterLog "[WRAPPER] Child PID: $childPID"
 
-        $result = Watchdog-MonitorInstaller -ChildProcess $child -ParentPID $parentPID -IdleTimeout $IdleTimeout
+        # ---------------------------------------------------------------------
+        # Stabilization delay: allow InnoSetup worker to fully initialize
+        # ---------------------------------------------------------------------
+        Write-VSCodeUpdaterLog "[WRAPPER] Stabilizing child process before watchdog"
+        Start-Sleep -Milliseconds 1500
+
+        $result = Invoke-InstallerWatchdog -ChildProcess $child -ParentPID $parentPID -IdleTimeout $IdleTimeout
 
         switch ($result) {
             "Success" { return [WatchdogExitCode]::Success }
