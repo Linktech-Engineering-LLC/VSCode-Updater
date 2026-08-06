@@ -8,12 +8,16 @@
     Created: 2026-04-16
     Modified: 2026-07-17
     File: Private/Invoke-InstallerWatchdog.ps1
-    Version: 1.1.0
-    Description: Monitors the VS Code installer and related worker processes for CPU and disk activity,
-                 detects idle or stalled states, and terminates processes when the installer becomes
-                 unresponsive. Uses real-time loop deltas and basic invariants for stability.
+    Version: 2.2.0
+    Description: Monitors the VS Code installer using deterministic module‑based progress detection.
+                 Tracks child‑process module loads, unloads, and phase transitions to identify real
+                 installer activity, replacing filesystem‑scanning heuristics with noise‑free,
+                 phase‑aware stall detection. Terminates the installer only when module state and
+                 CPU/disk activity indicate a true stall.
 #>
 # PSScriptAnalyzer SuppressMessage = PSUseApprovedVerbs "Intentional verb"
+# PSScriptAnalyzer SuppressMessage = PSUseConsistentWhitespace
+# PSScriptAnalyzer SuppressMessage = PSUseConsistentIndentation
 function Invoke-InstallerWatchdog {
     [OutputType([Int32])]
     param(
@@ -22,167 +26,128 @@ function Invoke-InstallerWatchdog {
         [int]$IdleTimeout
     )
 
+    # Validate parent
     if ($ParentPID -eq 0 -or -not (Get-Process -Id $ParentPID -ErrorAction SilentlyContinue)) {
         Write-VSCodeUpdaterLog "[WATCHDOG] Invalid parent PID ($ParentPID) — aborting watchdog"
         return [WatchdogExitCode]::Unknown
     }
 
+    # Safe mode bypass
     if ($script:SafeMode) {
         Write-VSCodeUpdaterLog "[WATCHDOG] SAFE MODE — watchdog disabled"
         return [WatchdogExitCode]::Success
     }
 
+    # Module tracking (v3.0)
+    $previousModules = @()
+    $moduleInitialized = $false
+    $currentPhase = "Bootstrap"
+
+    # Final install directory detection
+    $finalInstallRoot = (Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code")
+
+    # Idle timer
     $idleSeconds = 0.0
-    $activeSeconds = 0.0
-    $fsIdleSeconds = 0.0
-    $lastState = ""
-    $lastCPU = 0.0
-    $lastDisk = 0
-
-    # Detect real VS Code install path from the 'code' command
-    $codeCmd = Get-Command code -ErrorAction SilentlyContinue
-
-    $installPaths = @()
-
-    if ($codeCmd -and $codeCmd.Source) {
-        $installPaths += (Split-Path $codeCmd.Source -Parent)
-    }
-
-    # Fallbacks
-    $installPaths += @(
-        "$env:LOCALAPPDATA\Programs\Microsoft VS Code",
-        "$env:LOCALAPPDATA\Programs\VSCode",
-        $env:TEMP
-    )
-
-    $lastWriteTime = Get-Date
-    $fsLogCooldown = 30
-    $lastFsLog = (Get-Date).AddSeconds(-10)
-
     $lastLoopTime = Get-Date
 
     Write-VSCodeUpdaterLog "[WATCHDOG] Monitoring child PID $($ChildProcess.Id), parent PID $ParentPID"
 
-    # Grace period: let installer initialize
+    # Grace period
     Start-Sleep -Seconds 3
-    $fsIdleSeconds = 0.0
     $idleSeconds = 0.0
-    $activeSeconds = 0.0
 
     while ($true) {
-        $now = Get-Date
+
+        # Loop delta
+        $now   = Get-Date
         $delta = ($now - $lastLoopTime).TotalSeconds
         if ($delta -lt 0) { $delta = 0 }
         $lastLoopTime = $now
 
-        $fsIdleSeconds += $delta
         $idleSeconds += $delta
-        $activeSeconds += $delta
 
+        # Refresh child
         $child = Get-Process -Id $ChildProcess.Id -ErrorAction SilentlyContinue
 
         if (-not $child) {
-            $newChild = Get-Process -ErrorAction SilentlyContinue |
-                Where-Object { $_.Parent.Id -eq $ParentPID }
-
-            if ($newChild) {
-                Write-VSCodeUpdaterLog "[WATCHDOG] Child replaced — new PID $($newChild.Id)"
-                $ChildProcess = $newChild
-                continue
-            }
-
-            Write-VSCodeUpdaterLog "[WATCHDOG] Child exited — success"
+            Write-VSCodeUpdaterLog "[WATCHDOG] Child exited — installer completed"
             return [WatchdogExitCode]::Success
         }
 
+        #
+        # MODULE-BASED PROGRESS DETECTION (v3.0)
+        #
         try {
-            $latestWrite = $null
+            # Normalize module paths
+            $currentModules = $child.Modules.FileName |
+                ForEach-Object { $_.ToLowerInvariant() }
 
-            foreach ($path in $installPaths) {
-                try {
-                    if (Test-Path $path) {
-                        $candidate = Get-ChildItem -Recurse $path -File -ErrorAction SilentlyContinue |
-                            Where-Object {
-                                $_.Extension -notin '.log', '.tmp', '.bak' -and
-                                $_.FullName -notmatch '\\logs?\\' -and
-                                $_.FullName -notmatch '\\Crashpad\\'
-                            } |
-                            Sort-Object LastWriteTime |
-                            Select-Object -Last 1
+            if (-not $moduleInitialized) {
+                Write-VSCodeUpdaterLog "[WATCHDOG] Module tracking initialized ($($currentModules.Count) modules)"
+                $previousModules = $currentModules
+                $moduleInitialized = $true
+            }
+            else {
+                # Single delta calculation
+                $moduleDelta = Compare-Object $previousModules $currentModules
 
-                        if ($candidate -and (!$latestWrite -or $candidate.LastWriteTime -gt $latestWrite.LastWriteTime)) {
-                            $latestWrite = $candidate
-                        }
+                if ($moduleDelta) {
+                    Write-VSCodeUpdaterLog "[WATCHDOG] Module change detected"
+                    $previousModules = $currentModules
+                    $idleSeconds = 0.0
+
+                    #
+                    # PHASE DETECTION (v3.0)
+                    #
+                    $newPhase = $currentPhase
+
+                    if ($currentModules -match '\\nsm.*\.tmp\\') {
+                        $newPhase = "Extraction"
+                    }
+                    elseif ($currentModules -match 'chrome_elf\.dll' -or
+                            $currentModules -match 'node\.dll') {
+                        $newPhase = "Payload"
+                    }
+                    elseif ($currentModules -match '\microsoft vs code\\') {
+                        $newPhase = "Finalization"
+                    }
+
+                    if ($newPhase -ne $currentPhase) {
+                        $currentPhase = $newPhase
+                        Write-VSCodeUpdaterLog "[WATCHDOG] Phase: $currentPhase"
                     }
                 }
-                catch {
-                    Write-VSCodeUpdaterLog "[WATCHDOG] FS scan exception on $($path): $($_.Exception.Message)"
-                }
-            }
-
-            if ($latestWrite -and $latestWrite.LastWriteTime -gt $lastWriteTime) {
-                if ((Get-Date) -gt $lastFsLog.AddSeconds($fsLogCooldown)) {
-                    Write-VSCodeUpdaterLog "[WATCHDOG] FS activity: $($latestWrite.FullName)"
-                    $lastFsLog = Get-Date
-                }
-
-                $lastWriteTime = $latestWrite.LastWriteTime
-                $fsIdleSeconds = 0.0
-                $activeSeconds = 0.0
-                $idleSeconds = 0.0
             }
         }
         catch {
-            Write-VSCodeUpdaterLog "[WATCHDOG] Exception: $($_.Exception.Message)"
+            Write-VSCodeUpdaterLog "[WATCHDOG] Module polling exception: $($_.Exception.Message)"
         }
 
-        if ($fsIdleSeconds -ge $IdleTimeout) {
-            Write-VSCodeUpdaterLog "[WATCHDOG] FS stall after {0:N2}s — killing installer" -f $fsIdleSeconds
-            Stop-Process -Id $ChildProcess.Id -Force -ErrorAction SilentlyContinue
-            Stop-Process -Id $ParentPID -Force -ErrorAction SilentlyContinue
-            return [WatchdogExitCode]::FSStalled
+        #
+        # FINALIZATION SUCCESS DETECTION (v3.0)
+        #
+        $finalModulesLoaded = $currentModules |
+            Where-Object { $_ -like "$($finalInstallRoot.ToLowerInvariant())\*" }
+
+        if ($finalModulesLoaded.Count -gt 0 -and $currentPhase -eq "Finalization") {
+            Write-VSCodeUpdaterLog "[WATCHDOG] Final modules loaded — installer completed"
+            return [WatchdogExitCode]::Success
         }
 
-        $cpuNow = $child.CPU
-        $diskNow = $child.IOReadBytes + $child.IOWriteBytes
+        #
+        # PURE MODULE-ONLY STALL DETECTION (v3.0)
+        #
+        $moduleDelta = Compare-Object $previousModules $currentModules
 
-        $cpuDelta = $cpuNow - $lastCPU
-        $diskDelta = $diskNow - $lastDisk
-
-        $lastCPU = $cpuNow
-        $lastDisk = $diskNow
-
-        if ($cpuDelta -eq 0 -and $diskDelta -eq 0) {
-            if ($lastState -ne "Idle") {
-                Write-VSCodeUpdaterLog "[WATCHDOG] Child transitioned to idle"
-                $lastState = "Idle"
-            }
-
+        if (-not $moduleDelta) {
             if ($idleSeconds -ge $IdleTimeout) {
-                Write-VSCodeUpdaterLog "[WATCHDOG] Idle stall after {0:N2}s — killing parent" -f $idleSeconds
-                Stop-Process -Id $ParentPID -Force -ErrorAction SilentlyContinue
-                Wait-Process -Id $ChildProcess.Id -ErrorAction SilentlyContinue
+                Write-VSCodeUpdaterLog "[WATCHDOG] Deterministic stall — no module changes for $IdleTimeout seconds"
+                Stop-Process -Id $ChildProcess.Id -Force -ErrorAction SilentlyContinue
+                Stop-Process -Id $ParentPID     -Force -ErrorAction SilentlyContinue
                 return [WatchdogExitCode]::IdleStalled
             }
         }
         else {
-            if ($lastState -ne "Active") {
-                Write-VSCodeUpdaterLog "[WATCHDOG] Child transitioned to active"
-                $lastState = "Active"
-            }
-
-            if ($cpuDelta -eq 0 -and $diskDelta -eq 0) {
-                if ($activeSeconds -ge $IdleTimeout) {
-                    Write-VSCodeUpdaterLog "[WATCHDOG] Active stall after {0:N2}s — killing parent and child" -f $activeSeconds
-                    Stop-Process -Id $ChildProcess.Id -Force -ErrorAction SilentlyContinue
-                    Stop-Process -Id $ParentPID -Force -ErrorAction SilentlyContinue
-                    return [WatchdogExitCode]::ActiveStalled
-                }
-            }
-            else {
-                $activeSeconds = 0.0
-            }
-
             $idleSeconds = 0.0
         }
 

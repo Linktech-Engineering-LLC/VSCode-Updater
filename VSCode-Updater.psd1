@@ -13,11 +13,13 @@
 #>
 @{
     RootModule = 'VSCode-Updater.psm1'
-    ModuleVersion = '2.2.0'
+    ModuleVersion = '3.0.0'
     GUID = 'f2776614-4b50-45ba-b8fe-63875c447ab5'
     Author = 'Leon McClatchey'
     CompanyName = 'Linktech Engineering LLC'
-    Description = 'Deterministic, audit-transparent VS Code updater for Windows.'
+    Description = 'Deterministic installer engine with module‑based progress detection, replacing
+                   filesystem‑scanning heuristics with phase‑aware, child‑specific module tracking for
+                   reliable progress monitoring and accurate stall detection.'
     PowerShellVersion = '7.0'
     FunctionsToExport = @(
         'Update-VSCode',
@@ -43,7 +45,8 @@
             LicenseUri = 'https://github.com/Linktech-Engineering-LLC/VSCode-Updater/blob/main/LICENSE'
             IconUri = 'https://raw.githubusercontent.com/Linktech-Engineering-LLC/VSCode-Updater/main/icon.png'
             Tags = @('vscode' , 'update' , 'automation' , 'windows' , 'powershell' , 'devtools')
-            ReleaseNotes = 'Initial public release of VSCode-Updater.'
+            ReleaseNotes = 'v3.0 introduces a new module‑based installer engine, replacing filesystem scanning with
+                            deterministic phase tracking and improving reliability of progress and stall detection.'
         }
     }
 }

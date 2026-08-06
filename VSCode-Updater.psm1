@@ -8,7 +8,7 @@
     Created: 2026-04-16
     Modified: 2026-07-05
     File: VSCode-Updater.psm1
-    Version: 2.2.0
+    Version: 3.0.0
     Description: Module root for VSCode-Updater. Loads public functions, wires private helpers,
                  and exposes deterministic update, rollback, symlink diagnostics, and safe-mode operations.
 #>
@@ -38,7 +38,7 @@ Get-ChildItem -Path "$PSScriptRoot/Public" -Filter *.ps1 |
 
 Set-Variable -Name VSU_MaxRetries     -Value 5   -Scope Script -Option ReadOnly
 Set-Variable -Name VSU_DetectTimeout  -Value 10  -Scope Script -Option ReadOnly
-Set-Variable -Name VSU_DefaultIdle    -Value 600 -Scope Script -Option ReadOnly
+Set-Variable -Name VSU_DefaultIdle    -Value 900 -Scope Script -Option ReadOnly
 Set-Variable -Name VSU_SafeInstallerMode -Value $true -Scope Script -Option ReadOnly
 
 # Load module version from manifest
@@ -57,6 +57,9 @@ function Update-VSCode {
     param()
 
     $null = Write-VSCodeUpdaterLog "[UPDATE] Starting VS Code update"
+    Clear-SetupBootstrapper | Out-Null
+    Clear-VSCodeHelpers | Out-Null
+    Clear-InnoSetupWorkers | Out-Null
 
     if (-not $PSCmdlet.ShouldProcess("VS Code installation", "Update")) {
         $null = Write-VSCodeUpdaterLog "[UPDATE] ShouldProcess declined"
@@ -90,7 +93,7 @@ function Update-VSCode {
             $attempt++
             $null = Write-VSCodeUpdaterLog "[ATTEMPT] Installer attempt $attempt of $maxAttempts"
 
-            $result = Invoke-InstallerWrapper -InstallerPath $cachedInstaller -IdleTimeout $IdleTimeout
+            $result = Invoke-InstallerWrapper -InstallerPath $cachedInstaller -IdleTimeout $script:VSU_DefaultIdle
 
             Clear-VSCodeHelpers | Out-Null
             Clear-InnoSetupWorkers | Out-Null
@@ -119,6 +122,7 @@ function Update-VSCode {
             }
 
             $null = Write-VSCodeUpdaterLog "[RETRY] Cleaning processes and artifacts before retry"
+            Clear-SetupBootstrapper | Out-Null
             Clear-VSCodeHelpers | Out-Null
             Clear-InnoSetupWorkers | Out-Null
         }

@@ -24,16 +24,34 @@ function Invoke-InstallerWrapper {
     )
 
     try {
+        Clear-SetupBootstrapper | Out-Null
         $parent = Invoke-InstallerDetached -Path $InstallerPath
         $parentPID = $parent.Id
 
         Write-VSCodeUpdaterLog "[WRAPPER] Parent PID: $parentPID"
 
+        $timeout = 15000   # 15 seconds
+        $elapsed = 0
+        $interval = 250
+
         $child = $null
-        for ($i = 1; $i -le 10; $i++) {
-            $child = Get-InnoChildProcess -ParentPID $parentPID
+        while ($elapsed -lt $timeout) {
+
+            # direct or indirect worker
+            $child = Get-Process -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.Name -match '^is-[A-Za-z0-9]+' -or
+                    $_.Name -match 'tmp$' -or
+                    $_.Name -match 'tmp\.exe$' -or
+                    ($_.Path -and $_.Path -match 'is-[A-Za-z0-9]+\.tmp')
+                } |
+                Sort-Object StartTime |
+                Select-Object -Last 1
+
             if ($child) { break }
-            Start-Sleep -Milliseconds 300
+
+            Start-Sleep -Milliseconds $interval
+            $elapsed += $interval
         }
 
         if (-not $child) {
@@ -41,7 +59,7 @@ function Invoke-InstallerWrapper {
             return [WatchdogExitCode]::InstallerFailed
         }
 
-        $childPID = $child.ProcessId
+        $childPID = $child.Id
         Write-VSCodeUpdaterLog "[WRAPPER] Child PID: $childPID"
 
         # ---------------------------------------------------------------------
