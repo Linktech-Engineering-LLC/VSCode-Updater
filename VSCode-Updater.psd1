@@ -8,12 +8,12 @@
     Created: 2026-04-16
     Modified: 2026-06-14
     File: VSCode-Updater.psd1
-    Version: 2.2.0
+    Version: 3.1.0
     Description: Module manifest defining metadata, versioning, and export configuration for the VSCode-Updater module.
 #>
 @{
     RootModule = 'VSCode-Updater.psm1'
-    ModuleVersion = '3.0.0'
+    ModuleVersion = '3.1.0'
     GUID = 'f2776614-4b50-45ba-b8fe-63875c447ab5'
     Author = 'Leon McClatchey'
     CompanyName = 'Linktech Engineering LLC'

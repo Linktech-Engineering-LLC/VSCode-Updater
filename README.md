@@ -54,6 +54,9 @@ These issues cause VS Code to hang, refuse to launch, or leave behind incomplete
 * Automatic stall recovery and retry logic  
 * Explicit, automation‑safe return codes  
 * Pester test suite for critical components  
+* Windows servicing‑blocked detection (DISM checkhealth + pending reboot)
+* Deterministic early‑exit path when servicing is blocked
+* Automatic fallback suppression when OS servicing is unhealthy
 * Primary public API (``Update-VSCode``) supported by additional operator‑grade commands for version management, rollback, diagnostics, and safe‑mode execution.
 
 ---
@@ -242,6 +245,7 @@ Expected:
 `Function  Update-VSCode`
 
 ## Example Output
+### Example: Successful
 
 A typical successful run:
 
@@ -253,6 +257,16 @@ A typical successful run:
 ```
 
 All output is automation‑safe and audit‑transparent.
+
+### Example: Servicing Blocked
+
+```
+[2026-08-13 16:13:16] DIAGNOSTIC  DISM checkhealth indicates component store corruption
+[2026-08-13 16:13:16] WATCHDOG    Servicing blocked — aborting installer monitoring
+[2026-08-13 16:13:17] MAIN        Servicing blocked — skipping installer attempts
+[2026-08-13 16:13:17] FALLBACK    Servicing blocked — fallback skipped
+[2026-08-13 16:13:17] EXIT        Code: 114 (ServicingBlocked)
+```
 
 ## Architecture Overview
 
@@ -283,6 +297,11 @@ VSCode-Updater uses a four‑lane deterministic pipeline:
     * CPU/Disk active stall detection
     * Automatic retries
     * Deterministic exit codes
+    * Servicing health lane (DISM + reboot detection)
+        * Early abort if Windows servicing is unhealthy
+        * No retries
+        * No fallback
+        * Deterministic exit code 114
 
 ### Watchdog Behavior
 
@@ -298,6 +317,22 @@ The watchdog monitors the installer for progress and detects stalls using three 
 
 Each stall type produces a distinct return code and log entry.
 
+#### Servicing Blocked Lane
+
+The watchdog performs a pre‑flight servicing check using:
+* ```DISM /Online /Cleanup-Image /CheckHealth```
+* Windows pending reboot indicators
+
+If either condition indicates the OS servicing stack is unhealthy, the watchdog:
+* aborts monitoring immediately
+* terminates the installer worker
+* emits a deterministic ServicingBlocked exit code
+* skips retries
+* skips fallback
+* logs full diagnostics
+
+This prevents wasted attempts and avoids corrupting the VS Code installation when Windows itself is in a broken servicing state.
+
 #### Return Codes
 
 | Code | Meaning |
@@ -312,6 +347,7 @@ Each stall type produces a distinct return code and log entry.
 | 31 | CPU/Disk idle stall detected |
 | 32 | CPU/Disk active stall detected |
 | 99 | Unexpected watchdog state |
+| 114 | Servicing blocked (pending reboot or component store corruption) |
 
 These codes are deterministic and safe for automation, monitoring, and CI/CD pipelines.
 
@@ -322,6 +358,9 @@ These codes are deterministic and safe for automation, monitoring, and CI/CD pip
 * All watchdog transitions logged
 * All exit paths emit a final banner with exit code
 * Fully audit‑transparent
+* Servicing‑blocked conditions are logged with explicit DISM and reboot diagnostics
+* Timeline entries reflect early‑exit behavior (no extraction/payload/finalization)
+* Fallback suppression is logged deterministically
 
 #### Compatibility
 
@@ -333,6 +372,19 @@ These codes are deterministic and safe for automation, monitoring, and CI/CD pip
 | VS Code Insiders 	| ⚠ Not supported (Stable installer will overwrite Insiders) |
 | PowerShell 7.6+	| ✔ |
 | ARM64	| ⚠ Untested (expected to work with ARM64 user installer) |
+
+### Windows Servicing Requirements
+
+VSCode‑Updater requires a healthy Windows servicing stack.
+
+If DISM reports component store corruption or a pending reboot is detected, the updater will:
+
+* abort the installer
+* skip retries
+* skip fallback
+* emit exit code 114 (ServicingBlocked)
+
+This prevents partial installs and protects the VS Code installation from corruption.
 
 ## Development Status
 

@@ -8,7 +8,7 @@
     Created: 2026-04-16
     Modified: 2026-07-05
     File: VSCode-Updater.psm1
-    Version: 3.0.0
+    Version: 3.1.0
     Description: Module root for VSCode-Updater. Loads public functions, wires private helpers,
                  and exposes deterministic update, rollback, symlink diagnostics, and safe-mode operations.
 #>
@@ -98,16 +98,26 @@ function Update-VSCode {
             Clear-VSCodeHelpers | Out-Null
             Clear-InnoSetupWorkers | Out-Null
 
+            # ---------------------------------------------------------
+            # NEW: ServicingBlocked pre-flight failure
+            # ---------------------------------------------------------
+            if ($result -eq [WatchdogExitCode]::ServicingBlocked) {
+                $null = Write-VSCodeUpdaterLog "[MAIN] Servicing blocked — skipping installer attempts"
+                $installerFailed = $true
+                $fallbackReason = $result   # store reason for summary
+                break                       # DO NOT return — allow summary to run
+            }
+
             if ($result -eq [WatchdogExitCode]::Success) {
                 $null = Write-VSCodeUpdaterLog "[SUCCESS] Installer completed successfully on attempt $attempt"
                 break
             }
 
             if ($result -in @(
-                    [WatchdogExitCode]::IdleStalled,
-                    [WatchdogExitCode]::ActiveStalled,
-                    [WatchdogExitCode]::FSStalled
-                )) {
+                [WatchdogExitCode]::IdleStalled,
+                [WatchdogExitCode]::ActiveStalled,
+                [WatchdogExitCode]::FSStalled
+            )) {
                 $null = Write-VSCodeUpdaterLog "[STALL] Installer stalled on attempt $attempt"
                 $installerFailed = $true
                 $fallbackReason = $result
@@ -132,6 +142,63 @@ function Update-VSCode {
         # =====================================================================
 
         if ($installerFailed) {
+
+            #
+            # v3.1 — Print diagnostic summary from watchdog
+            #
+            if ($script:WatchdogDiagnostics) {
+
+                $null = Write-VSCodeUpdaterLog "[SUMMARY] Installer failed after $attempt attempts"
+
+                if ($script:WatchdogDiagnostics.StallReason) {
+                    Write-VSCodeUpdaterLog "[SUMMARY] Stall type: $($script:WatchdogDiagnostics.StallReason)"
+                }
+
+                if ($script:WatchdogDiagnostics.LastModules) {
+                    $mods = ($script:WatchdogDiagnostics.LastModules | Select-Object -Last 5) -join ', '
+                    $null = Write-VSCodeUpdaterLog "[SUMMARY] Last modules: $mods"
+                }
+
+                # Phase timeline
+                $timeline = $script:WatchdogDiagnostics.PhaseTimeline
+                if ($timeline) {
+                    $null = Write-VSCodeUpdaterLog "[SUMMARY] Timeline:"
+                    foreach ($phase in $timeline.Keys) {
+                        $ts = if ($timeline[$phase]) { $timeline[$phase].ToString("HH:mm:ss") } else { "never reached" }
+                        $null = Write-VSCodeUpdaterLog "[SUMMARY]   $phase`: $ts"
+                    }
+                }
+
+                # Extraction / payload / finalization flags
+                if (-not $script:WatchdogDiagnostics.ExtractionStarted) {
+                    $null = Write-VSCodeUpdaterLog "[SUMMARY] Extraction never started"
+                }
+                if (-not $script:WatchdogDiagnostics.PayloadLoaded) {
+                    $null = Write-VSCodeUpdaterLog "[SUMMARY] Payload never loaded"
+                }
+                if (-not $script:WatchdogDiagnostics.FinalizationReached) {
+                    $null = Write-VSCodeUpdaterLog "[SUMMARY] Finalization never reached"
+                }
+
+                # Pending reboot
+                if ($script:WatchdogDiagnostics.PendingReboot) {
+                    $null = Write-VSCodeUpdaterLog "[DIAGNOSTIC] Pending reboot detected — Windows servicing may be blocked"
+                }
+
+                # Component store corruption
+                if ($script:WatchdogDiagnostics.ComponentStoreCorrupt) {
+                    $null = Write-VSCodeUpdaterLog "[DIAGNOSTIC] Component store corruption detected — DISM checkhealth failed"
+                }
+            }
+
+            #
+            # Now trigger fallback — unless servicing is blocked
+            #
+            if ($fallbackReason -eq [WatchdogExitCode]::ServicingBlocked) {
+                $null = Write-VSCodeUpdaterLog "[FALLBACK] Servicing blocked — fallback skipped"
+                return [WatchdogExitCode]::ServicingBlocked
+            }
+
             $null = Write-VSCodeUpdaterLog "[FALLBACK] Installer failed — invoking ZIP fallback"
             Invoke-ZipFallback -Reason $fallbackReason | Out-Null
 
@@ -157,7 +224,7 @@ function Update-VSCode {
 
         $codeExe = Find-UserVSCode
         if (-not $codeExe) {
-            Write-VSCodeUpdaterLog "[CHECK] No user-space VS Code installation detected — aborting instead of ZIP fallback"
+            $null = Write-VSCodeUpdaterLog "[CHECK] No user-space VS Code installation detected — aborting instead of ZIP fallback"
             return [WatchdogExitCode]::MissingCodeExe
         }
 

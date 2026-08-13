@@ -38,10 +38,76 @@ function Invoke-InstallerWatchdog {
         return [WatchdogExitCode]::Success
     }
 
-    # Module tracking (v3.0)
+    #
+    # v3.1 DIAGNOSTIC STATE
+    #
+    $phaseTimeline = @{
+        Bootstrap    = $null
+        Servicing    = $null
+        Extraction   = $null
+        Payload      = $null
+        Finalization = $null
+    }
+
+    $extractionStarted   = $false
+    $payloadLoaded       = $false
+    $finalizationReached = $false
+
+    $stallReason         = "Unknown"
+    $pendingReboot       = $false
+    $componentStoreCorrupt = $false
+
+    # Detect pending reboot (v3.1)
+    if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') {
+        $pendingReboot = $true
+        Write-VSCodeUpdaterLog "[DIAGNOSTIC] Pending reboot detected — Windows servicing may be blocked"
+    }
+
+    # DISM component store health check (v3.1)
+    try {
+        dism.exe /online /cleanup-image /checkhealth | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            $componentStoreCorrupt = $true
+            Write-VSCodeUpdaterLog "[DIAGNOSTIC] DISM checkhealth indicates component store corruption"
+        }
+    }
+    catch {
+        Write-VSCodeUpdaterLog "[DIAGNOSTIC] DISM checkhealth failed: $($_.Exception.Message)"
+    }
+    # v3.2 EARLY EXIT: Abort installer monitoring if servicing is blocked
+    if ($pendingReboot -or $componentStoreCorrupt) {
+
+        $reason = if ($pendingReboot) {
+            "PendingReboot"
+        }
+        elseif ($componentStoreCorrupt) {
+            "ComponentStoreCorrupt"
+        }
+
+        Write-VSCodeUpdaterLog "[WATCHDOG] Servicing blocked — aborting installer monitoring (Reason: $reason)"
+
+        # Store diagnostics for main module
+        $script:WatchdogDiagnostics = [PSCustomObject]@{
+            StallReason           = $reason
+            PendingReboot         = $pendingReboot
+            ComponentStoreCorrupt = $componentStoreCorrupt
+            PhaseTimeline         = $phaseTimeline
+            ExtractionStarted     = $false
+            PayloadLoaded         = $false
+            FinalizationReached   = $false
+            LastModules           = @()
+        }
+
+        return [WatchdogExitCode]::ServicingBlocked
+    }
+
+    #
+    # Module tracking (v3.0 → v3.1)
+    #
     $previousModules = @()
     $moduleInitialized = $false
     $currentPhase = "Bootstrap"
+    $phaseTimeline["Bootstrap"] = Get-Date
 
     # Final install directory detection
     $finalInstallRoot = (Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code")
@@ -71,14 +137,15 @@ function Invoke-InstallerWatchdog {
 
         if (-not $child) {
             Write-VSCodeUpdaterLog "[WATCHDOG] Child exited — installer completed"
+            $finalizationReached = $true
+            $phaseTimeline["Finalization"] = Get-Date
             return [WatchdogExitCode]::Success
         }
 
         #
-        # MODULE-BASED PROGRESS DETECTION (v3.0)
+        # MODULE-BASED PROGRESS DETECTION (v3.1)
         #
         try {
-            # Normalize module paths
             $currentModules = $child.Modules.FileName |
                 ForEach-Object { $_.ToLowerInvariant() }
 
@@ -88,28 +155,39 @@ function Invoke-InstallerWatchdog {
                 $moduleInitialized = $true
             }
             else {
-                # Single delta calculation
                 $moduleDelta = Compare-Object $previousModules $currentModules
 
                 if ($moduleDelta) {
                     Write-VSCodeUpdaterLog "[WATCHDOG] Module change detected"
+
+                    foreach ($d in $moduleDelta) {
+                        $side = if ($d.SideIndicator -eq '=>') { 'Added' } else { 'Removed' }
+                        Write-VSCodeUpdaterLog "[WATCHDOG] Module ${side}: $($d.InputObject)"
+                    }
+
                     $previousModules = $currentModules
                     $idleSeconds = 0.0
 
                     #
-                    # PHASE DETECTION (v3.0)
+                    # PHASE DETECTION (v3.1)
                     #
                     $newPhase = $currentPhase
 
                     if ($currentModules -match '\\nsm.*\.tmp\\') {
                         $newPhase = "Extraction"
+                        $extractionStarted = $true
+                        $phaseTimeline["Extraction"] = Get-Date
                     }
-                    elseif ($currentModules -match 'chrome_elf\.dll' -or
-                            $currentModules -match 'node\.dll') {
+                    elseif ($currentModules -like '*chrome_elf.dll*' -or
+                            $currentModules -like '*node.dll*') {
                         $newPhase = "Payload"
+                        $payloadLoaded = $true
+                        $phaseTimeline["Payload"] = Get-Date
                     }
-                    elseif ($currentModules -match '\microsoft vs code\\') {
+                    elseif ($currentModules -like '*microsoft vs code*') {
                         $newPhase = "Finalization"
+                        $finalizationReached = $true
+                        $phaseTimeline["Finalization"] = Get-Date
                     }
 
                     if ($newPhase -ne $currentPhase) {
@@ -124,26 +202,63 @@ function Invoke-InstallerWatchdog {
         }
 
         #
-        # FINALIZATION SUCCESS DETECTION (v3.0)
+        # FINALIZATION SUCCESS DETECTION (v3.1)
         #
         $finalModulesLoaded = $currentModules |
             Where-Object { $_ -like "$($finalInstallRoot.ToLowerInvariant())\*" }
 
         if ($finalModulesLoaded.Count -gt 0 -and $currentPhase -eq "Finalization") {
             Write-VSCodeUpdaterLog "[WATCHDOG] Final modules loaded — installer completed"
+            $finalizationReached = $true
+            $phaseTimeline["Finalization"] = Get-Date
             return [WatchdogExitCode]::Success
         }
 
         #
-        # PURE MODULE-ONLY STALL DETECTION (v3.0)
+        # UNIFIED STALL DETECTOR (v3.1)
         #
         $moduleDelta = Compare-Object $previousModules $currentModules
 
         if (-not $moduleDelta) {
+
             if ($idleSeconds -ge $IdleTimeout) {
+
+                #
+                # Stall reason classification (v3.1)
+                #
+                if ($currentModules -like '*setupapi.dll*') {
+                    $stallReason = "Windows servicing deadlock"
+                }
+                elseif (-not $extractionStarted) {
+                    $stallReason = "NSIS extraction never started"
+                }
+                elseif (-not $payloadLoaded) {
+                    $stallReason = "Payload modules never loaded"
+                }
+
                 Write-VSCodeUpdaterLog "[WATCHDOG] Deterministic stall — no module changes for $IdleTimeout seconds"
+                Write-VSCodeUpdaterLog "[WATCHDOG] Stall reason: $stallReason"
+
+                #
+                # Kill installer
+                #
                 Stop-Process -Id $ChildProcess.Id -Force -ErrorAction SilentlyContinue
                 Stop-Process -Id $ParentPID     -Force -ErrorAction SilentlyContinue
+
+                #
+                # v3.1: Store diagnostic metadata for main module
+                #
+                $script:WatchdogDiagnostics = [PSCustomObject]@{
+                    StallReason           = $stallReason
+                    PendingReboot         = $pendingReboot
+                    ComponentStoreCorrupt = $componentStoreCorrupt
+                    PhaseTimeline         = $phaseTimeline
+                    ExtractionStarted     = $extractionStarted
+                    PayloadLoaded         = $payloadLoaded
+                    FinalizationReached   = $finalizationReached
+                    LastModules           = $currentModules
+                }
+
                 return [WatchdogExitCode]::IdleStalled
             }
         }

@@ -35,6 +35,7 @@ enum WatchdogExitCode {
     LaunchFailed = 111
     LaunchException = 112
     HealthCheckFailed = 113
+    ServicingBlocked = 114
 
     # Fallback failures
     FallbackFailed = 120

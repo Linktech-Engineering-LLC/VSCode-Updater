@@ -71,11 +71,20 @@ function Invoke-InstallerWrapper {
         $result = Invoke-InstallerWatchdog -ChildProcess $child -ParentPID $parentPID -IdleTimeout $IdleTimeout
 
         switch ($result) {
-            "Success" { return [WatchdogExitCode]::Success }
-            "FS-Stalled" { return [WatchdogExitCode]::FSStalled }
-            "Idle-Stalled" { return [WatchdogExitCode]::IdleStalled }
+            "Success"        { return [WatchdogExitCode]::Success }
+            "FS-Stalled"     { return [WatchdogExitCode]::FSStalled }
+            "Idle-Stalled"   { return [WatchdogExitCode]::IdleStalled }
             "Active-Stalled" { return [WatchdogExitCode]::ActiveStalled }
-            default { return [WatchdogExitCode]::InstallerFailed }
+
+            # NEW — servicing pre-flight failure
+            "ServicingBlocked" {
+                Write-VSCodeUpdaterLog "[WRAPPER] Servicing blocked — aborting installer wrapper"
+                return [WatchdogExitCode]::ServicingBlocked
+            }
+
+            default {
+                return [WatchdogExitCode]::InstallerFailed
+            }
         }
     }
     catch [InstallerNotFoundException] {
