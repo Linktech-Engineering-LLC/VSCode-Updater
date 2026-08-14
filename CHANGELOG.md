@@ -5,6 +5,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to **Semantic Versioning**.
 
 ---
+## [3.1.0] – 2026‑08‑13
+### Added
+* **Windows servicing‑blocked detection:**
+  * Integrated DISM /Online /Cleanup-Image /CheckHealth for component store corruption detection.
+  * Added pending reboot detection via Windows servicing indicators.
+  * Introduced deterministic early‑abort behavior when Windows servicing is unhealthy.
+* **New watchdog lane: ServicingBlocked**
+  * Aborts monitoring before extraction, payload load, or finalization.
+  * Prevents installer corruption during unhealthy OS servicing states.
+  * Emits explicit exit code ServicingBlocked (114).
+* **Full diagnostic logging for servicing failures:**
+  * DISM corruption flags.
+  * Pending reboot flags.
+  * Timeline entries reflecting early‑exit behavior.
+  * Summary reporting integrated with existing stall diagnostics.
+
+### Changed
+* Updated main update loop to skip retries and fallback when servicing is blocked.
+* Updated fallback logic to suppress ZIP fallback during servicing‑blocked conditions.
+* Updated module manifest (`.psd1`) and module file (`.psm1`) to include:
+  * new exit code
+  * new watchdog lane
+  * updated exports
+* Updated README.md to document:
+  * servicing‑blocked behavior
+  * early‑exit pipeline
+  * new return code
+  * updated architecture overview
+
+### Fixed
+* Eliminated stray boolean diagnostic output caused by WriteLog returning values to the pipeline.
+* Improved cleanup behavior for early‑abort scenarios to ensure deterministic worker termination.
+* Corrected final result propagation when servicing is blocked to avoid misclassification as installer failure.
 
 ## [2.1.0] - 2026-06-20
 ### Added
