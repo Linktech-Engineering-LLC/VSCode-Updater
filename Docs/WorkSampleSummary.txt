@@ -1,0 +1,17 @@
+Title: VSCode‑Updater Architecture & Design
+Purpose: Demonstrates deterministic platform engineering, hardened update orchestration, 
+		 and operator‑grade reliability.
+Relevance to Netflix: Reflects the same principles used in internal developer‑platform tooling — 
+					  deterministic behavior, predictable failure modes, and audit‑transparent logging.
+
+Key Highlights:
+
+* Watchdog model for deterministic process control
+* Symlink‑based version management
+* Exit‑code normalization for automation systems
+* Hardened silent‑install pipeline
+* Security‑by‑construction boundaries
+
+Although this implementation is in PowerShell, the design principles—deterministic execution, 
+hardened orchestration, normalized exit states, watchdog monitoring, 
+and operator‑grade logging—are directly transferable to Python platform tooling.
