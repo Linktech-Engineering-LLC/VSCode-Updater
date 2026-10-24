@@ -30,6 +30,44 @@ function Get-VSCodeSymlinkInfo {
         return $info
     }
 
+    $logFile = "C:\Logs\Update-Code.log"
+
+    if (Test-Path $logFile)
+    {
+        $log = Get-Content $logFile -Tail 500
+
+        if ([string]::IsNullOrWhiteSpace($script:LastUpdateResult))
+        {
+            $lastUpdate = $log |
+                Select-String "completed successfully" |
+                Select-Object -Last 1
+
+            if ($lastUpdate)
+            {
+                $info.LastUpdateResult = ($lastUpdate.Line -replace '^\S+\s+\S+\s+\[FALLBACK\]\s*','')
+            }
+        }
+        else
+        {
+            $info.LastUpdateResult = $script:LastUpdateResult
+        }
+
+        if ([string]::IsNullOrWhiteSpace($script:LastFallbackReason))
+        {
+            $fallback = $log |
+                Select-String "Reason:" |
+                Select-Object -Last 1
+
+            if ($fallback)
+            {
+                $info.LastFallbackReason = ($fallback.Line -replace '.*Reason:\s*','')
+            }
+        }
+        else
+        {
+            $info.LastFallbackReason = $script:LastFallbackReason
+        }
+    }    
     try {
         $item = Get-Item $symlinkPath -ErrorAction Stop
         $info.LinkType = $item.LinkType

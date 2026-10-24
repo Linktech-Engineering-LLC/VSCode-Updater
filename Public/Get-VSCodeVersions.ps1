@@ -19,9 +19,9 @@ function Get-VSCodeVersions {
 
     $root = Join-Path $env:LOCALAPPDATA "Programs"
 
-    # Only match folders like VSCode-YYYYMMDD-HHMMSS
+    # Only match folders that starts with 'VSCode-'
     $dirs = Get-ChildItem $root -Directory -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match '^VSCode-\d{8}-\d{6}$' } |
+        Where-Object { $_.Name.StartsWith('VSCode-') } |
         Sort-Object Name -Descending
 
     $results = @()
@@ -29,11 +29,15 @@ function Get-VSCodeVersions {
     foreach ($dir in $dirs) {
 
         $path = $dir.FullName
+        $codeVersion = $null
 
         # Find Code.exe anywhere under the version folder
         $codeExe = Get-ChildItem -Path $path -Recurse -Filter "Code.exe" -ErrorAction SilentlyContinue |
                    Select-Object -First 1
-
+        if ($codeExe)
+        {
+            $codeVersion = $codeExe.VersionInfo.ProductVersion
+        }
         # Find product.json only in resources/app/product.json
         $productJson = Get-ChildItem -Path $path -Recurse -Filter "product.json" -ErrorAction SilentlyContinue |
                        Where-Object { $_.FullName -match 'resources\\app\\product\.json$' } |
@@ -56,6 +60,7 @@ function Get-VSCodeVersions {
 
         $results += [PSCustomObject]@{
             Version        = $dir.Name
+            VSCodeVersion  = $codeVersion
             Path           = $path
             LastModified   = $dir.LastWriteTime
             IsValid        = $isValid

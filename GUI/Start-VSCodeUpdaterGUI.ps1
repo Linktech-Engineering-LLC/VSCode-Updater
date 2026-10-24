@@ -128,7 +128,7 @@ function Update-TaskViewerStatus {
         }
     }
     else {
-        Write-TaskViewerLine "SetupApp: Not running" "Red"
+        Write-TaskViewerLine "Installer/Updater: Not running" "Red"
     }
 
     Write-TaskViewerLine ("Last check: {0}" -f (Get-Date -Format "HH:mm:ss")) "Gray"
@@ -136,9 +136,11 @@ function Update-TaskViewerStatus {
 
 function Update-SymlinkInfo {
     $info = Get-VSCodeSymlinkInfo
-
-    $txtActiveVersion.Text  = "Active Version: $($info.ActiveVersion)"
-    $txtSymlinkTarget.Text  = "Symlink Target: $($info.TargetPath)"
+    $version = Get-VSCodeVersions
+    $target = Split-Path $($info.TargetPath) -Leaf
+    $txtActiveInstaller.Text  = "Active Installer: $($info.ActiveVersion)"
+    $txtActiveVersion.Text = "Active Version: $($version.VSCodeVersion[0])"
+    $txtSymlinkTarget.Text  = "Symlink Target: $($target)"
     $txtSymlinkValid.Text   = "Symlink Status: " + ($info.IsValid ? "Valid" : "Broken")
     $txtLastUpdate.Text     = "Last Update: $($info.LastUpdateResult)"
     $txtFallbackReason.Text = "Fallback Reason: $($info.LastFallbackReason)"
@@ -176,6 +178,7 @@ function Start-VSCodeUpdaterGUI {
     $script:txtStatus    = $window.FindName("TxtStatus")
     $script:txtLog       = $window.FindName("TxtLog")
     $global:txtCommandOutput = $window.FindName("TxtCommandOutput")
+    $script:txtActiveInstaller  = $window.FindName("TxtActiveInstaller")
     $script:txtActiveVersion  = $window.FindName("TxtActiveVersion")
     $script:txtSymlinkTarget  = $window.FindName("TxtSymlinkTarget")
     $script:txtSymlinkValid   = $window.FindName("TxtSymlinkValid")
@@ -187,15 +190,30 @@ function Start-VSCodeUpdaterGUI {
     $script:btnPauseLog        = $window.FindName("BtnPauseLog")
     $script:btnSearchLog       = $window.FindName("BtnSearchLog")
     $script:chkAutoScroll      = $window.FindName("ChkAutoScroll")
-    $script:txtSearchLog       = $window.FindName("TxtSearchLog")
+    $script:txtSearchLog       = $window.FindName("TxtSearchLogBar")
     $script:txtTaskViewer      = $window.FindName("TxtTaskViewer")
     $script:btnRestartSetup    = $window.FindName("BtnRestartSetup")
     $script:chkSafeMode        = $window.FindName("ChkSafeMode")
+    $script:expCommandOutput = $window.FindName("ExpCommandOutput")
 
     $chkSafeMode.IsChecked       = $true
     $chkAutoScroll.IsChecked     = $true
     $script:vm.AutoScrollEnabled = $true
 
+    $baseHeight = 500
+
+    $expCommandOutput.Add_Expanded({
+        $window.Height = $baseHeight + 180
+    })
+
+    $expCommandOutput.Add_Collapsed({
+        $window.Height = $baseHeight
+    })
+    $module = Get-Module VSCode-Updater
+
+    if ($module) {
+        $window.Title = "VSCode Updater v$($module.Version)"
+    }
     $txtTaskViewer.Document = New-Object System.Windows.Documents.FlowDocument
 
     $info = Get-VSCodeSymlinkInfo
@@ -236,7 +254,7 @@ function Start-VSCodeUpdaterGUI {
 
         $active = $info.ActiveVersion
         foreach ($row in $dgVersions.Items) {
-            if ($row.Name -eq $active) {
+            if ($row.Version -eq $active) {
                 $dgVersions.ScrollIntoView($row)
                 $dgVersions.Dispatcher.Invoke({
                     $container = $dgVersions.ItemContainerGenerator.ContainerFromItem($row)
